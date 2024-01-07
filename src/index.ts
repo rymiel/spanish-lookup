@@ -151,7 +151,7 @@ function buildTable(a: readonly string[], b: readonly string[]) {
 }
 
 function isHeaderName(str: string) {
-  return str === "H1" || str === "H2" || str === "H3" || str === "H4";
+  return str === "H1" || str === "H2" || str === "H3" || str === "H4" || str === "H5";
 }
 
 function equalOrHigherLevel(base: string, other: string) {
@@ -207,7 +207,6 @@ function spanishDefinitionLookup(page: HTMLDivElement, query: string, cleanup: (
 
   const spanishSection: HTMLElement[] = [];
 
-  // But I will add a h1 header to show the currently made search
   const searchHeader = document.createElement("h1");
   searchHeader.innerText = query;
   spanishSection.push(searchHeader);
@@ -264,6 +263,28 @@ function spanishDefinitionLookup(page: HTMLDivElement, query: string, cleanup: (
   document.title = `${query} | Spanish`;
 }
 
+function englishTranslationLookup(page: HTMLDivElement, query: string, cleanup: () => void) {
+  // Delete all [edit] links, this is just for viewing, not editing
+  page.querySelectorAll(".mw-editsection").forEach((i) => i.remove());
+  // Delete all references [1], I don't need them here
+  page.querySelectorAll(".reference").forEach((i) => i.remove());
+  page.querySelectorAll(".external").forEach((i) => i.remove());
+
+  const englishHeader = page.querySelector<HTMLElement>("h2 span#English")!.parentElement!;
+
+  const englishSection: HTMLElement[] = [];
+
+  const searchHeader = document.createElement("h1");
+  searchHeader.innerText = query;
+  englishSection.push(searchHeader);
+
+  englishSection.push(...delimitSection(englishHeader));
+
+  cleanup();
+  englishSection.forEach((el) => content.appendChild(el));
+  document.title = `${query} | Spanish`;
+}
+
 function startLoading() {
   // Clear previous results and create a spinner
   content.innerHTML = "";
@@ -293,6 +314,9 @@ function makeQuery(query: string) {
     document.title = "Spanish";
   };
 
+  const isTranslationLookup = query.endsWith("?");
+  query = query.substring(0, query.length - 1);
+
   fetch(constructURL(query), {
     method: "GET",
     headers: new Headers({
@@ -321,7 +345,11 @@ function makeQuery(query: string) {
       let page = document.createElement("div");
       page.innerHTML = html;
 
-      spanishDefinitionLookup(page, query, cleanup);
+      if (isTranslationLookup) {
+        englishTranslationLookup(page, query, cleanup);
+      } else {
+        spanishDefinitionLookup(page, query, cleanup);
+      }
     })
     .catch((err) => {
       cleanup();

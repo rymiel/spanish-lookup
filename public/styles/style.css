@@ -139,6 +139,32 @@ ol {
   padding: 0;
 }
 
+.ul-column-count[data-column-count="2"] > ul,
+.ul-column-count[data-column-count="2"] > ol,
+.ul-column-count[data-column-count="2"] > dl {
+  column-count: 2;
+}
+.ul-column-count[data-column-count="3"] > ul,
+.ul-column-count[data-column-count="3"] > ol,
+.ul-column-count[data-column-count="3"] > dl {
+  column-count: 3;
+}
+.ul-column-count[data-column-count="4"] > ul,
+.ul-column-count[data-column-count="4"] > ol,
+.ul-column-count[data-column-count="4"] > dl {
+  column-count: 4;
+}
+.ul-column-count[data-column-count="5"] > ul,
+.ul-column-count[data-column-count="5"] > ol,
+.ul-column-count[data-column-count="5"] > dl {
+  column-count: 5;
+}
+.ul-column-count[data-column-count="6"] > ul,
+.ul-column-count[data-column-count="6"] > ol,
+.ul-column-count[data-column-count="6"] > dl {
+  column-count: 6;
+}
+
 h1 {
   margin-block-start: 0em;
   margin-block-end: 0.4em;
@@ -155,14 +181,17 @@ h4 {
   margin-block-end: 0.25em;
 }
 
-a.inlink {
-  color: rgb(93, 207, 173);
-  transition: all 180ms;
-}
-
 a {
   color: rgb(181, 243, 224);
   transition: all 180ms;
+}
+
+a.inlink {
+  color: rgb(93, 207, 173);
+}
+
+a.new {
+  color: #ba0000;
 }
 
 hr {

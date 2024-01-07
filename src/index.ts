@@ -1,13 +1,18 @@
-function constructURL(query) {
+let form: HTMLFormElement;
+let queryBox: HTMLInputElement;
+let content: HTMLDivElement;
+let left: HTMLDivElement;
+
+function constructURL(query: string): string {
   const encoded = encodeURIComponent(query);
   return `https://en.wiktionary.org/w/api.php?action=parse&page=${encoded}&prop=text&formatversion=2&origin=*&format=json`;
 }
 
 addEventListener("load", () => {
-  const form = document.getElementById("form");
-  const queryBox = document.getElementById("query");
-  const content = document.getElementById("content");
-  const left = document.getElementById("leftMain");
+  form = document.getElementById("form") as HTMLFormElement;
+  queryBox = document.getElementById("query") as HTMLInputElement;
+  content = document.getElementById("content") as HTMLDivElement;
+  left = document.getElementById("leftMain") as HTMLDivElement;
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -40,11 +45,10 @@ addEventListener("load", () => {
         // Delete all references [1], I don't need them here
         page.querySelectorAll(".reference").forEach((i) => i.remove());
 
-        const spanishHeaderText = page.querySelector("h2 span#Spanish");
-        const spanishHeader = spanishHeaderText.parentElement;
+        const spanishHeaderText = page.querySelector("h2 span#Spanish") as HTMLElement;
+        const spanishHeader = spanishHeaderText.parentElement!;
 
-        /** @type {Element[]} */
-        const spanishSection = [];
+        const spanishSection: HTMLElement[] = [];
 
         // we don't need "Spanish" at the top of the page, we already know it's spanish!
         // spanishSection.push(spanishHeader);
@@ -54,31 +58,24 @@ addEventListener("load", () => {
         searchHeader.innerText = query;
         spanishSection.push(searchHeader);
 
-        /** @type {HTMLElement?} */
-        let nextHeader = spanishHeader.nextElementSibling;
+        let nextHeader = spanishHeader.nextElementSibling as HTMLElement | null;
         while (nextHeader !== null && nextHeader.nodeName !== "H2") {
           spanishSection.push(nextHeader);
-          nextHeader = nextHeader.nextElementSibling;
+          nextHeader = nextHeader.nextElementSibling as HTMLElement | null;
         }
 
         spanishSection.forEach((el) => spanishPage.appendChild(el));
         page = spanishPage;
 
-        /** @type {HTMLElement} */
         const pronuncationTitle = spanishSection.find(
           (el) => el.nodeName == "H3" && el.innerText == "Pronunciation"
-        );
+        ) as HTMLElement;
         if (pronuncationTitle) {
-          /** @type {HTMLElement} */
-          const pronuncationSection = pronuncationTitle.nextElementSibling;
-          /** @type {HTMLElement[]} */
-          let pronuncationEntries = Array.from(
-            pronuncationSection.querySelectorAll("li")
-          ).filter((el) => el.innerText.startsWith("IPA"));
-          /** @type {HTMLElement[]} */
-          const switcherEntries = Array.from(
-            page.querySelectorAll(".vsSwitcher > .vsHide > ul > li")
+          const pronuncationSection = pronuncationTitle.nextElementSibling as HTMLElement;
+          let pronuncationEntries: HTMLElement[] = Array.from(pronuncationSection.querySelectorAll("li")).filter((el) =>
+            el.innerText.startsWith("IPA")
           );
+          const switcherEntries = Array.from(page.querySelectorAll(".vsSwitcher > .vsHide > ul > li")) as HTMLElement[];
 
           // Sometimes the pronuncations are in consecutive switchers, instead of directly under the "Pronuncation"
           // header. We can't use this in every case because sometimes the switchers aren't there at all, so just
@@ -93,10 +90,7 @@ addEventListener("load", () => {
               ? pronuncationEntries[0]
               : pronuncationEntries.find((el) => {
                   const inner = el.innerText;
-                  return (
-                    inner.includes("(Buenos Aires and environs)") ||
-                    inner.includes("(Latin America)")
-                  );
+                  return inner.includes("(Buenos Aires and environs)") || inner.includes("(Latin America)");
                 });
 
           if (correctPronuncation === undefined) {
@@ -109,7 +103,7 @@ addEventListener("load", () => {
             // Extract just the IPA. There's some jank here to account for words which do not vary by region. Those
             // are formatted slightly differently by wiktionary.
             const parts = correctPronuncation.innerText.split(")", 3);
-            let pronuncationText = parts[parts.length - 1].trim();
+            let pronuncationText = parts[parts.length - 1]!.trim();
             if (pronuncationText.startsWith(":")) {
               pronuncationText = pronuncationText.substring(1).trim();
             }
@@ -117,7 +111,7 @@ addEventListener("load", () => {
             // Remove the whole Pronuncation section
             let i = spanishSection.indexOf(pronuncationTitle);
             spanishSection.splice(i, 1);
-            while (spanishSection[i].nodeName != "H3") {
+            while (spanishSection[i]!.nodeName != "H3") {
               spanishSection.splice(i, 1);
             }
 
@@ -126,54 +120,47 @@ addEventListener("load", () => {
           }
         }
 
-        /** @param {string} s */
-        /** @returns {[number, number, number]} */
-        const rgb = (s) =>
+        const rgb = (s: string): number[] =>
           s
             .substring(4, s.length - 1)
             .split(", ")
             .map((i) => parseInt(i));
 
-        /** @param {[number, number, number]} n */
-        const unrgb = (n) => `rgb(${n.join(", ")})`;
+        const unrgb = (n: number[]) => `rgb(${n.join(", ")})`;
 
-        /** @param {HTMLElement} el */
-        const filterColors = (el) => {
+        const filterColors = (el: HTMLElement) => {
           const bg = el.style.backgroundColor;
           if (bg !== "") {
             const inverted = rgb(bg).map((i) => 255 - i);
             el.style.backgroundColor = unrgb(inverted);
           }
-          Array.from(el.children).forEach((i) => filterColors(i));
+          Array.from(el.children).forEach((i) => filterColors(i as HTMLElement));
         };
 
         filterColors(page);
 
-        const vosotrosFilterColumns = [
-          1, 1, 1, 0, 0, 2, 4, 6, 5, 5, 5, 5, 5, 0, 6, 5, 5, 5, 5, 0, 6, 5, 5,
-        ];
+        const vosotrosFilterColumns = [1, 1, 1, 0, 0, 2, 4, 6, 5, 5, 5, 5, 5, 0, 6, 5, 5, 5, 5, 0, 6, 5, 5];
 
-        /** @param {HTMLTableRowElement} row */
-        const filterVosotrosRow = (row) => {
+        const filterVosotrosRow = (row: HTMLTableRowElement) => {
           const cells = row.cells;
           const idx = row.rowIndex;
 
-          const decIndex = vosotrosFilterColumns[idx];
-          if (cells[decIndex].colSpan === 1) {
-            cells[decIndex].remove();
+          const decIndex = vosotrosFilterColumns[idx]!;
+          if (cells[decIndex]!.colSpan === 1) {
+            cells[decIndex]!.remove();
           } else {
-            cells[decIndex].colSpan -= 1;
+            cells[decIndex]!.colSpan -= 1;
           }
         };
 
         /** @param {HTMLTableElement} table */
-        const filterVosotrosTable = (table) => {
+        const filterVosotrosTable = (table: HTMLTableElement) => {
           for (const i of table.rows) {
             filterVosotrosRow(i);
           }
         };
 
-        const buildTable = (a, b) => {
+        const buildTable = (a: string[], b: string[]) => {
           const formTable = document.createElement("table");
           formTable.className = "quick";
 
@@ -194,23 +181,17 @@ addEventListener("load", () => {
         };
 
         /** @type {NodeListOf<HTMLElement>} */
-        const tables = page.querySelectorAll(".NavContent");
+        const tables: NodeListOf<HTMLElement> = page.querySelectorAll(".NavContent");
         if (tables.length > 0) {
-          /** @type {HTMLTableElement} */
-          const primaryTable = tables[0].firstElementChild;
+          const primaryTable = tables[0].firstElementChild as HTMLTableElement;
           filterVosotrosTable(primaryTable);
           const presentIndicative = primaryTable.rows[8];
-          const piForms = Array.from(
-            presentIndicative.querySelectorAll("td > span")
-          ).map((i) => i.innerText);
+          const piForms = Array.from(presentIndicative.querySelectorAll("span")).map((i) => i.innerText);
           if (piForms.length === 5) {
             piForms.splice(1, 0, piForms[1]);
           }
 
-          const piTable = buildTable(
-            ["yo", "tú", "vos", "él", "nosotros", "ustedes"],
-            piForms
-          );
+          const piTable = buildTable(["yo", "tú", "vos", "él", "nosotros", "ustedes"], piForms);
           left.appendChild(piTable);
         }
 

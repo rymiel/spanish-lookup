@@ -2,6 +2,7 @@ let form: HTMLFormElement;
 let queryBox: HTMLInputElement;
 let content: HTMLDivElement;
 let left: HTMLDivElement;
+let activeQuery: string;
 
 function constructURL(query: string): string {
   const encoded = encodeURIComponent(query);
@@ -150,8 +151,14 @@ function startLoading() {
 }
 
 function makeQuery(query: string) {
+  if (query == activeQuery) {
+    return;
+  }
+
+  activeQuery = query;
   queryBox.value = query;
   window.location.hash = query;
+  queryBox.disabled = true;
   const loader = startLoading();
 
   fetch(constructURL(query), {
@@ -233,6 +240,8 @@ function makeQuery(query: string) {
       // Load into page
       loader.remove();
       spanishSection.forEach((el) => content.appendChild(el));
+      queryBox.disabled = false;
+      queryBox.select();
       document.title = `${query} | Spanish`;
 
       // Debug

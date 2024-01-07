@@ -120,12 +120,16 @@ main {
 
 p {
   margin: 2px;
-  font-family: Andika, Solera, sans-serif;
+  font-family: Andika, sans-serif;
 }
 
-ul,
-ol {
+ul {
   margin: 0;
+  padding: 0;
+}
+
+ol {
+  margin: 0.3em 0 0 1.8em;
   padding: 0;
 }
 
@@ -202,22 +206,6 @@ li:target {
 .hl {
   font-weight: bold;
   text-align: center;
-}
-
-.rb {
-  border-right: 3px solid;
-}
-
-.db {
-  border-bottom: 3px solid;
-}
-
-.ub {
-  border-top: 3px solid;
-}
-
-header {
-  background-color: #452798;
 }
 
 a:active,

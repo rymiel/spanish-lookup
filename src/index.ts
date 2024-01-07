@@ -170,6 +170,83 @@ function removeFromArray<T>(array: T[], ...elements: T[]) {
   });
 }
 
+function spanishDefinitionLookup(page: HTMLDivElement, query: string, cleanup: () => void) {
+  const spanishPage = document.createElement("div");
+
+  // Delete all [edit] links, this is just for viewing, not editing
+  page.querySelectorAll(".mw-editsection").forEach((i) => i.remove());
+  // Delete all references [1], I don't need them here
+  page.querySelectorAll(".reference").forEach((i) => i.remove());
+  page.querySelectorAll(".external").forEach((i) => i.remove());
+
+  const spanishHeader = page.querySelector<HTMLElement>("h2 span#Spanish")?.parentElement;
+  if (!spanishHeader) {
+    const errorMessage = document.createElement("div");
+    errorMessage.innerText = "This page has no Spanish entry!";
+    content.appendChild(errorMessage);
+    cleanup();
+    return;
+  }
+
+  const spanishSection: HTMLElement[] = [];
+
+  // But I will add a h1 header to show the currently made search
+  const searchHeader = document.createElement("h1");
+  searchHeader.innerText = query;
+  spanishSection.push(searchHeader);
+
+  spanishSection.push(...delimitSection(spanishHeader));
+
+  spanishSection.forEach((el) => spanishPage.appendChild(el));
+  // I'm not sure how the javascript GC and DOM stuff works, but just in case clean up the stuff we're not using
+  page.remove();
+  page = spanishPage;
+
+  const pronuncationTitle = spanishSection.find((el) => el.nodeName == "H3" && el.innerText == "Pronunciation");
+  if (pronuncationTitle) {
+    const pronuncation = findPronuncation(pronuncationTitle, page);
+
+    if (pronuncation) {
+      // Remove the whole Pronuncation section
+      removeFromArray(spanishSection, pronuncationTitle, ...delimitSection(pronuncationTitle));
+
+      // Put the pronuncation directly in the title
+      searchHeader.innerText = `<${query}> ${pronuncation}`;
+    }
+  }
+
+  filterColors(page);
+  filterLinks(page);
+
+  const tables = page.querySelectorAll(".NavContent");
+  if (tables.length > 0) {
+    const primaryTable = tables[0].firstElementChild as HTMLTableElement;
+    filterVosotrosTable(primaryTable);
+    filterCompactTable(primaryTable);
+    const presentIndicative = primaryTable.rows[8];
+    const piForms = Array.from(presentIndicative.querySelectorAll("span")).map((i) => i.innerText);
+    // drop the "present" label
+    piForms.splice(0, 1);
+    // just make a special case for hay
+    // TODO: actually care about each element in each table cell
+    if (piForms[3] === "hay") {
+      piForms.splice(3, 1);
+      piForms.splice(1, 0, piForms[1]);
+    } else if (piForms.length === 5) {
+      // vos and tú forms are the same, duplicate it
+      piForms.splice(1, 0, piForms[1]);
+    }
+
+    const piTable = buildTable(pronouns, piForms);
+    left.appendChild(piTable);
+  }
+
+  // Load into page
+  cleanup();
+  spanishSection.forEach((el) => content.appendChild(el));
+  document.title = `${query} | Spanish`;
+}
+
 function startLoading() {
   // Clear previous results and create a spinner
   content.innerHTML = "";
@@ -225,76 +302,9 @@ function makeQuery(query: string) {
       const html = json.parse.text;
 
       let page = document.createElement("div");
-      const spanishPage = document.createElement("div");
       page.innerHTML = html;
 
-      // Delete all [edit] links, this is just for viewing, not editing
-      page.querySelectorAll(".mw-editsection").forEach((i) => i.remove());
-      // Delete all references [1], I don't need them here
-      page.querySelectorAll(".reference").forEach((i) => i.remove());
-      page.querySelectorAll(".external").forEach((i) => i.remove());
-
-      const spanishHeader = page.querySelector<HTMLElement>("h2 span#Spanish")?.parentElement;
-      if (!spanishHeader) {
-        const errorMessage = document.createElement("div");
-        errorMessage.innerText = "This page has no Spanish entry!";
-        content.appendChild(errorMessage);
-        cleanup();
-        return;
-      }
-
-      const spanishSection: HTMLElement[] = [];
-
-      // But I will add a h1 header to show the currently made search
-      const searchHeader = document.createElement("h1");
-      searchHeader.innerText = query;
-      spanishSection.push(searchHeader);
-
-      spanishSection.push(...delimitSection(spanishHeader));
-
-      spanishSection.forEach((el) => spanishPage.appendChild(el));
-      // I'm not sure how the javascript GC and DOM stuff works, but just in case clean up the stuff we're not using
-      page.remove();
-      page = spanishPage;
-
-      const pronuncationTitle = spanishSection.find((el) => el.nodeName == "H3" && el.innerText == "Pronunciation");
-      if (pronuncationTitle) {
-        const pronuncation = findPronuncation(pronuncationTitle, page);
-
-        if (pronuncation) {
-          // Remove the whole Pronuncation section
-          removeFromArray(spanishSection, pronuncationTitle, ...delimitSection(pronuncationTitle));
-
-          // Put the pronuncation directly in the title
-          searchHeader.innerText = `<${query}> ${pronuncation}`;
-        }
-      }
-
-      filterColors(page);
-      filterLinks(page);
-
-      const tables = page.querySelectorAll(".NavContent");
-      if (tables.length > 0) {
-        const primaryTable = tables[0].firstElementChild as HTMLTableElement;
-        filterVosotrosTable(primaryTable);
-        filterCompactTable(primaryTable);
-        const presentIndicative = primaryTable.rows[8];
-        const piForms = Array.from(presentIndicative.querySelectorAll("span")).map((i) => i.innerText);
-        // drop the "present" label
-        piForms.splice(0, 1);
-        // vos and tú forms are the same, duplicate it
-        if (piForms.length === 5) {
-          piForms.splice(1, 0, piForms[1]);
-        }
-
-        const piTable = buildTable(pronouns, piForms);
-        left.appendChild(piTable);
-      }
-
-      // Load into page
-      cleanup();
-      spanishSection.forEach((el) => content.appendChild(el));
-      document.title = `${query} | Spanish`;
+      spanishDefinitionLookup(page, query, cleanup);
     })
     .catch((err) => {
       cleanup();

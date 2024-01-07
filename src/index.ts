@@ -72,6 +72,29 @@ function filterColors(el: HTMLElement) {
   Array.from(el.children).forEach((i) => filterColors(i as HTMLElement));
 }
 
+function filterLinks(el: HTMLElement) {
+  if (el instanceof HTMLAnchorElement) {
+    const href = el.href;
+    if (href !== "") {
+      if (href.startsWith(window.location.origin)) {
+        const suffix = href.substring(window.location.origin.length);
+        console.log(suffix);
+        if (suffix.endsWith("#Spanish") && suffix.startsWith("/wiki/")) {
+          const page = suffix.substring(6, suffix.length - 8);
+          el.href = "#" + page;
+        } else {
+          el.href = "https://en.wiktionary.org/" + suffix;
+          el.target = "_blank";
+        }
+      } else {
+        el.target = "_blank";
+      }
+      console.log(href);
+    }
+  }
+  Array.from(el.children).forEach((i) => filterLinks(i as HTMLElement));
+}
+
 const vosotrosFilterColumns = [1, 1, 1, 0, 0, 2, 4, 6, 5, 5, 5, 5, 5, 0, 6, 5, 5, 5, 5, 0, 6, 5, 5] as const;
 
 function filterVosotrosRow(row: HTMLTableRowElement) {
@@ -128,6 +151,7 @@ function startLoading() {
 
 function makeQuery(query: string) {
   queryBox.value = query;
+  window.location.hash = query;
   const loader = startLoading();
 
   fetch(constructURL(query), {
@@ -148,6 +172,7 @@ function makeQuery(query: string) {
       page.querySelectorAll(".mw-editsection").forEach((i) => i.remove());
       // Delete all references [1], I don't need them here
       page.querySelectorAll(".reference").forEach((i) => i.remove());
+      page.querySelectorAll(".external").forEach((i) => i.remove());
 
       const spanishHeader = page.querySelector<HTMLElement>("h2 span#Spanish")!.parentElement!;
 
@@ -188,6 +213,7 @@ function makeQuery(query: string) {
       }
 
       filterColors(page);
+      filterLinks(page);
 
       const tables = page.querySelectorAll(".NavContent");
       if (tables.length > 0) {
@@ -226,4 +252,16 @@ addEventListener("load", () => {
 
     makeQuery(query);
   });
+
+  if (document.location.hash !== "") {
+    console.log(document.location.hash);
+    makeQuery(document.location.hash.substring(1));
+  }
+});
+
+addEventListener("hashchange", () => {
+  if (document.location.hash !== "") {
+    console.log(document.location.hash);
+    makeQuery(document.location.hash.substring(1));
+  }
 });

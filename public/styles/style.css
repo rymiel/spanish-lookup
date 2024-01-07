@@ -200,6 +200,11 @@ a.new {
   font-style: italic;
 }
 
+.floatright {
+  clear: right;
+  float: right;
+}
+
 hr {
   border-color: #eee;
 }

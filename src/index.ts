@@ -150,11 +150,28 @@ function buildTable(a: readonly string[], b: readonly string[]) {
   return formTable;
 }
 
+function isHeaderName(str: string) {
+  return str === "H1" || str === "H2" || str === "H3" || str === "H4";
+}
+
+function equalOrHigherLevel(base: string, other: string) {
+  if (!isHeaderName(base) || !isHeaderName(other)) {
+    return false;
+  }
+
+  const baseLevel = parseInt(base[1]);
+  const otherLevel = parseInt(other[1]);
+  return otherLevel <= baseLevel;
+}
+
 function delimitSection(startHeader: HTMLElement): HTMLElement[] {
   const elements: HTMLElement[] = [];
   const level = startHeader.nodeName;
+  if (!isHeaderName(level)) {
+    throw new Error(`Cannot delimit non-header element ${level}`);
+  }
   let next = startHeader.nextElementSibling as HTMLElement | null;
-  while (next !== null && next.nodeName !== level) {
+  while (next !== null && !equalOrHigherLevel(level, next.nodeName)) {
     elements.push(next);
     next = next.nextElementSibling as HTMLElement | null;
   }

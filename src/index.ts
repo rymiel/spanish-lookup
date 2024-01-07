@@ -81,6 +81,7 @@ function filterLinks(el: HTMLElement) {
         const suffix = href.substring(window.location.origin.length);
         if (suffix.endsWith("#Spanish") && suffix.startsWith("/wiki/")) {
           const page = suffix.substring(6, suffix.length - 8);
+          el.classList.add("inlink");
           el.href = "#" + page;
         } else {
           el.href = "https://en.wiktionary.org/" + suffix;
@@ -137,6 +138,26 @@ function buildTable(a: readonly string[], b: readonly string[]) {
   return formTable;
 }
 
+function delimitSection(startHeader: HTMLElement): HTMLElement[] {
+  const elements: HTMLElement[] = [];
+  const level = startHeader.nodeName;
+  let next = startHeader.nextElementSibling as HTMLElement | null;
+  while (next !== null && next.nodeName !== level) {
+    elements.push(next);
+    next = next.nextElementSibling as HTMLElement | null;
+  }
+  return elements;
+}
+
+function removeFromArray<T>(array: T[], ...elements: T[]) {
+  elements.forEach((e) => {
+    const i = array.indexOf(e);
+    if (i !== -1) {
+      array.splice(i, 1);
+    }
+  });
+}
+
 function startLoading() {
   // Clear previous results and create a spinner
   content.innerHTML = "";
@@ -159,6 +180,13 @@ function makeQuery(query: string) {
   queryBox.disabled = true;
   const loader = startLoading();
 
+  const cleanup = () => {
+    loader.remove();
+    queryBox.disabled = false;
+    queryBox.select();
+    document.title = "Spanish";
+  };
+
   fetch(constructURL(query), {
     method: "GET",
     headers: new Headers({
@@ -167,6 +195,21 @@ function makeQuery(query: string) {
   })
     .then((r) => r.json())
     .then((json) => {
+      // console.log(json);
+      if (json.error) {
+        console.error(json.error);
+        const errorMessage = document.createElement("div");
+        if (json.error.info) {
+          errorMessage.title = json.error.code;
+          errorMessage.innerText = json.error.info;
+        } else {
+          errorMessage.title = json.toString();
+          errorMessage.innerText = "An unknown error ocurred";
+        }
+        content.appendChild(errorMessage);
+        cleanup();
+        return;
+      }
       const html = json.parse.text;
 
       let page = document.createElement("div");
@@ -179,25 +222,27 @@ function makeQuery(query: string) {
       page.querySelectorAll(".reference").forEach((i) => i.remove());
       page.querySelectorAll(".external").forEach((i) => i.remove());
 
-      const spanishHeader = page.querySelector<HTMLElement>("h2 span#Spanish")!.parentElement!;
+      const spanishHeader = page.querySelector<HTMLElement>("h2 span#Spanish")?.parentElement;
+      if (!spanishHeader) {
+        const errorMessage = document.createElement("div");
+        errorMessage.innerText = "This page has no Spanish entry!";
+        content.appendChild(errorMessage);
+        cleanup();
+        return;
+      }
 
       const spanishSection: HTMLElement[] = [];
-
-      // we don't need "Spanish" at the top of the page, we already know it's spanish!
-      // spanishSection.push(spanishHeader);
 
       // But I will add a h1 header to show the currently made search
       const searchHeader = document.createElement("h1");
       searchHeader.innerText = query;
       spanishSection.push(searchHeader);
 
-      let nextHeader = spanishHeader.nextElementSibling as HTMLElement | null;
-      while (nextHeader !== null && nextHeader.nodeName !== "H2") {
-        spanishSection.push(nextHeader);
-        nextHeader = nextHeader.nextElementSibling as HTMLElement | null;
-      }
+      spanishSection.push(...delimitSection(spanishHeader));
 
       spanishSection.forEach((el) => spanishPage.appendChild(el));
+      // I'm not sure how the javascript GC and DOM stuff works, but just in case clean up the stuff we're not using
+      page.remove();
       page = spanishPage;
 
       const pronuncationTitle = spanishSection.find((el) => el.nodeName == "H3" && el.innerText == "Pronunciation");
@@ -206,11 +251,7 @@ function makeQuery(query: string) {
 
         if (pronuncation) {
           // Remove the whole Pronuncation section
-          let i = spanishSection.indexOf(pronuncationTitle);
-          spanishSection.splice(i, 1);
-          while (spanishSection[i].nodeName != "H3") {
-            spanishSection.splice(i, 1);
-          }
+          removeFromArray(spanishSection, pronuncationTitle, ...delimitSection(pronuncationTitle));
 
           // Put the pronuncation directly in the title
           searchHeader.innerText = `<${query}> ${pronuncation}`;
@@ -238,11 +279,13 @@ function makeQuery(query: string) {
       }
 
       // Load into page
-      loader.remove();
+      cleanup();
       spanishSection.forEach((el) => content.appendChild(el));
-      queryBox.disabled = false;
-      queryBox.select();
       document.title = `${query} | Spanish`;
+    })
+    .catch((err) => {
+      cleanup();
+      console.error(err);
     });
 }
 

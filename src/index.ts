@@ -226,6 +226,8 @@ function makeQuery(query: string) {
         filterVosotrosTable(primaryTable);
         const presentIndicative = primaryTable.rows[8];
         const piForms = Array.from(presentIndicative.querySelectorAll("span")).map((i) => i.innerText);
+        // drop the "present" label
+        piForms.splice(0, 1);
         // vos and tú forms are the same, duplicate it
         if (piForms.length === 5) {
           piForms.splice(1, 0, piForms[1]);

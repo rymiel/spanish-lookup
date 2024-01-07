@@ -44,7 +44,7 @@ function findPronuncation(pronuncationTitle: HTMLElement, page: HTMLDivElement):
         });
 
   if (correctPronuncation === undefined) {
-    console.log(
+    console.error(
       `Couldn't find the correct pronuncation from the choices ${pronuncationEntries
         .map((el) => el.innerText)
         .join(", ")}`
@@ -79,7 +79,6 @@ function filterLinks(el: HTMLElement) {
     if (href !== "") {
       if (href.startsWith(window.location.origin)) {
         const suffix = href.substring(window.location.origin.length);
-        console.log(suffix);
         if (suffix.endsWith("#Spanish") && suffix.startsWith("/wiki/")) {
           const page = suffix.substring(6, suffix.length - 8);
           el.href = "#" + page;
@@ -90,7 +89,6 @@ function filterLinks(el: HTMLElement) {
       } else {
         el.target = "_blank";
       }
-      console.log(href);
     }
   }
   Array.from(el.children).forEach((i) => filterLinks(i as HTMLElement));
@@ -243,9 +241,6 @@ function makeQuery(query: string) {
       queryBox.disabled = false;
       queryBox.select();
       document.title = `${query} | Spanish`;
-
-      // Debug
-      console.log(tables);
     });
 }
 
@@ -263,14 +258,12 @@ addEventListener("load", () => {
   });
 
   if (document.location.hash !== "") {
-    console.log(document.location.hash);
     makeQuery(document.location.hash.substring(1));
   }
 });
 
 addEventListener("hashchange", () => {
   if (document.location.hash !== "") {
-    console.log(document.location.hash);
     makeQuery(document.location.hash.substring(1));
   }
 });

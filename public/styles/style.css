@@ -96,6 +96,12 @@ body {
   }
 }
 
+@media (max-width: 900px) {
+  .NavContent table {
+    font-size: 14px;
+  }
+}
+
 header,
 nav,
 footer,

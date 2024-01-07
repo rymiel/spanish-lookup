@@ -97,21 +97,33 @@ function filterLinks(el: HTMLElement) {
 
 const vosotrosFilterColumns = [1, 1, 1, 0, 0, 2, 4, 6, 5, 5, 5, 5, 5, 0, 6, 5, 5, 5, 5, 0, 6, 5, 5] as const;
 
-function filterVosotrosRow(row: HTMLTableRowElement) {
-  const cells = row.cells;
-  const idx = row.rowIndex;
+function filterVosotrosTable(table: HTMLTableElement) {
+  for (const row of table.rows) {
+    const cells = row.cells;
+    const idx = row.rowIndex;
 
-  const decIndex = vosotrosFilterColumns[idx];
-  if (cells[decIndex].colSpan === 1) {
-    cells[decIndex].remove();
-  } else {
-    cells[decIndex].colSpan -= 1;
+    const decIndex = vosotrosFilterColumns[idx];
+    if (cells[decIndex].colSpan === 1) {
+      cells[decIndex].remove();
+    } else {
+      cells[decIndex].colSpan -= 1;
+    }
   }
 }
 
-function filterVosotrosTable(table: HTMLTableElement) {
-  for (const i of table.rows) {
-    filterVosotrosRow(i);
+const compactableRows = [7, 14, 20];
+function filterCompactTable(table: HTMLTableElement) {
+  for (const row of table.rows) {
+    if (compactableRows.indexOf(row.rowIndex) == -1) {
+      continue;
+    }
+
+    for (const cell of Array.from(row.cells)) {
+      if (cell.cellIndex == 0) {
+        continue;
+      }
+      cell.remove();
+    }
   }
 }
 
@@ -265,6 +277,7 @@ function makeQuery(query: string) {
       if (tables.length > 0) {
         const primaryTable = tables[0].firstElementChild as HTMLTableElement;
         filterVosotrosTable(primaryTable);
+        filterCompactTable(primaryTable);
         const presentIndicative = primaryTable.rows[8];
         const piForms = Array.from(presentIndicative.querySelectorAll("span")).map((i) => i.innerText);
         // drop the "present" label

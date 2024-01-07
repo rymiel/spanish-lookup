@@ -190,12 +190,6 @@ function removeFromArray<T>(array: T[], ...elements: T[]) {
 function spanishDefinitionLookup(page: HTMLDivElement, query: string, cleanup: () => void) {
   const spanishPage = document.createElement("div");
 
-  // Delete all [edit] links, this is just for viewing, not editing
-  page.querySelectorAll(".mw-editsection").forEach((i) => i.remove());
-  // Delete all references [1], I don't need them here
-  page.querySelectorAll(".reference").forEach((i) => i.remove());
-  page.querySelectorAll(".external").forEach((i) => i.remove());
-
   const spanishHeader = page.querySelector<HTMLElement>("h2 span#Spanish")?.parentElement;
   if (!spanishHeader) {
     const errorMessage = document.createElement("div");
@@ -264,12 +258,7 @@ function spanishDefinitionLookup(page: HTMLDivElement, query: string, cleanup: (
 }
 
 function englishTranslationLookup(page: HTMLDivElement, query: string, cleanup: () => void) {
-  // Delete all [edit] links, this is just for viewing, not editing
-  page.querySelectorAll(".mw-editsection").forEach((i) => i.remove());
-  // Delete all references [1], I don't need them here
-  page.querySelectorAll(".reference").forEach((i) => i.remove());
-  page.querySelectorAll(".external").forEach((i) => i.remove());
-
+  const englishPage = document.createElement("div");
   const englishHeader = page.querySelector<HTMLElement>("h2 span#English")!.parentElement!;
 
   const englishSection: HTMLElement[] = [];
@@ -280,9 +269,52 @@ function englishTranslationLookup(page: HTMLDivElement, query: string, cleanup: 
 
   englishSection.push(...delimitSection(englishHeader));
 
+  englishSection.forEach((el) => englishPage.appendChild(el));
+  // I'm not sure how the javascript GC and DOM stuff works, but just in case clean up the stuff we're not using
+  page.remove();
+  page = englishPage;
+
+  const translationHeadings = page.querySelectorAll<HTMLElement>("[id^=Translations].mw-headline");
+  const translationSections = Array.from(translationHeadings).flatMap((i) => delimitSection(i.parentElement!));
+
+  const trList: HTMLElement[] = [];
+  translationSections.forEach((i) => {
+    if (i.className !== "NavFrame") return;
+    const navHeader = i.firstElementChild! as HTMLElement;
+    if (navHeader.className !== "NavHead") return;
+    const navContent = i.lastElementChild!;
+    if (navContent.className !== "NavContent") return;
+    const trEnglish = navHeader.innerText;
+    if (trEnglish === "Translations to be checked") return;
+
+    const trElement = document.createElement("div");
+    const trKey = document.createElement("span");
+    trKey.innerText = trEnglish + ": ";
+    trElement.appendChild(trKey);
+
+    const trEntries = Array.from(navContent.querySelectorAll('li > span[lang="es"]'));
+    if (trEntries.length === 0) {
+      const trNothing = document.createElement("span");
+      trNothing.innerText = "No translations";
+      trNothing.className = "nothing";
+      trElement.appendChild(trNothing);
+    } else {
+      trEntries.forEach((e, i) => {
+        if (i > 0) {
+          trElement.appendChild(document.createTextNode(", "));
+        }
+        e.classList.add("tr");
+        trElement.appendChild(e);
+      });
+    }
+
+    filterLinks(trElement);
+    trList.push(trElement);
+  });
+
   cleanup();
-  englishSection.forEach((el) => content.appendChild(el));
-  document.title = `${query} | Spanish`;
+  trList.forEach((el) => content.appendChild(el));
+  document.title = `${query}? | Spanish`;
 }
 
 function startLoading() {
@@ -315,7 +347,9 @@ function makeQuery(query: string) {
   };
 
   const isTranslationLookup = query.endsWith("?");
-  query = query.substring(0, query.length - 1);
+  if (isTranslationLookup) {
+    query = query.substring(0, query.length - 1);
+  }
 
   fetch(constructURL(query), {
     method: "GET",
@@ -344,6 +378,12 @@ function makeQuery(query: string) {
 
       let page = document.createElement("div");
       page.innerHTML = html;
+
+      // Delete all [edit] links, this is just for viewing, not editing
+      page.querySelectorAll(".mw-editsection").forEach((i) => i.remove());
+      // Delete all references [1], I don't need them here
+      page.querySelectorAll(".reference").forEach((i) => i.remove());
+      page.querySelectorAll(".external").forEach((i) => i.remove());
 
       if (isTranslationLookup) {
         englishTranslationLookup(page, query, cleanup);

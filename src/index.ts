@@ -230,6 +230,7 @@ function spanishDefinitionLookup(page: HTMLDivElement, query: string, cleanup: (
 
   const tables = page.querySelectorAll(".NavContent");
   if (tables.length > 0) {
+    // TODO: fix for Phrasebook entries
     const primaryTable = tables[0].firstElementChild as HTMLTableElement;
     filterVosotrosTable(primaryTable);
     filterCompactTable(primaryTable);

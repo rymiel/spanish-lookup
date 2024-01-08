@@ -258,6 +258,7 @@ function spanishDefinitionLookup(page: HTMLDivElement, query: string, cleanup: (
   document.title = `${query} | Spanish`;
 }
 
+// TODO: fix for those random pages which have their translations on a separate page for some reason
 function englishTranslationLookup(page: HTMLDivElement, query: string, cleanup: () => void) {
   const englishPage = document.createElement("div");
   const englishHeader = page.querySelector<HTMLElement>("h2 span#English")!.parentElement!;
@@ -412,12 +413,12 @@ addEventListener("load", () => {
   });
 
   if (document.location.hash !== "") {
-    makeQuery(document.location.hash.substring(1));
+    makeQuery(decodeURIComponent(document.location.hash.substring(1)));
   }
 });
 
 addEventListener("hashchange", () => {
   if (document.location.hash !== "") {
-    makeQuery(document.location.hash.substring(1));
+    makeQuery(decodeURIComponent(document.location.hash.substring(1)));
   }
 });

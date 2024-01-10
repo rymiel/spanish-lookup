@@ -232,9 +232,11 @@ function spanishDefinitionLookup(page: HTMLElement, query: string, cleanup: () =
   filterColors(page);
   filterLinks(page);
 
-  const tables = page.querySelectorAll(".NavContent");
+  const tables = Array.from(page.querySelectorAll(".NavContent")).filter(
+    (i) => !i.parentElement?.classList.contains("phrasebook")
+  );
+  console.log(tables);
   if (tables.length > 0) {
-    // TODO: fix for Phrasebook entries
     const primaryTable = tables[0].firstElementChild as HTMLTableElement;
     filterVosotrosTable(primaryTable);
     filterCompactTable(primaryTable);

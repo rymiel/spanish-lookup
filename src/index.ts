@@ -4,6 +4,8 @@ let content: HTMLDivElement;
 let left: HTMLDivElement;
 let activeQuery: string;
 
+let controller = new AbortController();
+
 function constructURL(query: string): string {
   const encoded = encodeURIComponent(query);
   return `https://en.wiktionary.org/w/api.php?action=parse&page=${encoded}&prop=text&formatversion=2&origin=*&format=json`;
@@ -192,10 +194,12 @@ function spanishDefinitionLookup(page: HTMLDivElement, query: string, cleanup: (
 
   const spanishHeader = page.querySelector<HTMLElement>("h2 span#Spanish")?.parentElement;
   if (!spanishHeader) {
-    const errorMessage = document.createElement("div");
-    errorMessage.innerText = "This page has no Spanish entry!";
-    content.appendChild(errorMessage);
-    cleanup();
+    if (activeQuery === query) {
+      const errorMessage = document.createElement("div");
+      errorMessage.innerText = "This page has no Spanish entry!";
+      content.appendChild(errorMessage);
+      cleanup();
+    }
     return;
   }
 
@@ -253,9 +257,11 @@ function spanishDefinitionLookup(page: HTMLDivElement, query: string, cleanup: (
   }
 
   // Load into page
-  cleanup();
-  spanishSection.forEach((el) => content.appendChild(el));
-  document.title = `${query} | Spanish`;
+  if (activeQuery === query) {
+    cleanup();
+    spanishSection.forEach((el) => content.appendChild(el));
+    document.title = `${query} | Spanish`;
+  }
 }
 
 // TODO: fix for those random pages which have their translations on a separate page for some reason
@@ -314,9 +320,12 @@ function englishTranslationLookup(page: HTMLDivElement, query: string, cleanup: 
     trList.push(trElement);
   });
 
-  cleanup();
-  trList.forEach((el) => content.appendChild(el));
-  document.title = `${query}? | Spanish`;
+  // Load into page
+  if (activeQuery === query + "?") {
+    cleanup();
+    trList.forEach((el) => content.appendChild(el));
+    document.title = `${query}? | Spanish`;
+  }
 }
 
 function startLoading() {
@@ -348,13 +357,17 @@ function makeQuery(query: string) {
     document.title = "Spanish";
   };
 
+  const originalQuery = query;
   const isTranslationLookup = query.endsWith("?");
   if (isTranslationLookup) {
     query = query.substring(0, query.length - 1);
   }
 
+  controller.abort(); // Abort all existing queries
+  controller = new AbortController(); // Make a new controller for the new query
   fetch(constructURL(query), {
     method: "GET",
+    signal: controller.signal,
     headers: new Headers({
       "Api-User-Agent": "Spanish-Lookup/1.0 (emilia@rymiel.space)",
     }),
@@ -372,8 +385,10 @@ function makeQuery(query: string) {
           errorMessage.title = json.toString();
           errorMessage.innerText = "An unknown error ocurred";
         }
-        content.appendChild(errorMessage);
-        cleanup();
+        if (activeQuery === originalQuery) {
+          content.appendChild(errorMessage);
+          cleanup();
+        }
         return;
       }
       const html = json.parse.text;
@@ -394,8 +409,10 @@ function makeQuery(query: string) {
       }
     })
     .catch((err) => {
-      cleanup();
-      console.error(err);
+      if (activeQuery === originalQuery) {
+        cleanup();
+        console.error(err);
+      }
     });
 }
 

@@ -189,6 +189,9 @@ function removeFromArray<T>(array: T[], ...elements: T[]) {
   });
 }
 
+// TODO: nicer layout of pages with multiple definitions (i.e. jump to definition)
+// this includes pages with multiple "etymologies", for example `colmo`
+
 function spanishDefinitionLookup(page: HTMLElement, query: string, cleanup: () => void) {
   const spanishPage = document.createElement("div");
 

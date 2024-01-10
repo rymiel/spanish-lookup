@@ -22,7 +22,7 @@ function unrgb(n: number[]) {
   return `rgb(${n.join(", ")})`;
 }
 
-function findPronuncation(pronuncationTitle: HTMLElement, page: HTMLDivElement): string | undefined {
+function findPronuncation(pronuncationTitle: HTMLElement, page: HTMLElement): string | undefined {
   const pronuncationSection = pronuncationTitle.nextElementSibling! as HTMLElement;
   let pronuncationEntries: HTMLElement[] = Array.from(pronuncationSection.querySelectorAll("li")).filter((el) =>
     el.innerText.startsWith("IPA")
@@ -189,7 +189,7 @@ function removeFromArray<T>(array: T[], ...elements: T[]) {
   });
 }
 
-function spanishDefinitionLookup(page: HTMLDivElement, query: string, cleanup: () => void) {
+function spanishDefinitionLookup(page: HTMLElement, query: string, cleanup: () => void) {
   const spanishPage = document.createElement("div");
 
   const spanishHeader = page.querySelector<HTMLElement>("h2 span#Spanish")?.parentElement;
@@ -265,7 +265,7 @@ function spanishDefinitionLookup(page: HTMLDivElement, query: string, cleanup: (
 }
 
 // TODO: fix for those random pages which have their translations on a separate page for some reason
-function englishTranslationLookup(page: HTMLDivElement, query: string, cleanup: () => void) {
+function englishTranslationLookup(page: HTMLElement, query: string, cleanup: () => void) {
   const englishPage = document.createElement("div");
   const englishHeader = page.querySelector<HTMLElement>("h2 span#English")!.parentElement!;
 
@@ -393,8 +393,7 @@ function makeQuery(query: string) {
       }
       const html = json.parse.text;
 
-      let page = document.createElement("div");
-      page.innerHTML = html;
+      let page = new DOMParser().parseFromString(html, 'text/html').body;
 
       // Delete all [edit] links, this is just for viewing, not editing
       page.querySelectorAll(".mw-editsection").forEach((i) => i.remove());

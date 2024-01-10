@@ -393,7 +393,7 @@ function makeQuery(query: string) {
       }
       const html = json.parse.text;
 
-      let page = new DOMParser().parseFromString(html, 'text/html').body;
+      let page = new DOMParser().parseFromString(html, "text/html").body;
 
       // Delete all [edit] links, this is just for viewing, not editing
       page.querySelectorAll(".mw-editsection").forEach((i) => i.remove());

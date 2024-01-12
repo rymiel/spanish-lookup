@@ -66,35 +66,47 @@ function findPronuncation(pronuncationTitle: HTMLElement, page: HTMLElement): st
   }
 }
 
-function filterColors(el: HTMLElement) {
-  const bg = el.style.backgroundColor;
-  if (bg !== "") {
-    const inverted = rgb(bg).map((i) => 255 - i);
-    el.style.backgroundColor = unrgb(inverted);
-  }
-  Array.from(el.children).forEach((i) => filterColors(i as HTMLElement));
-}
+const recursiveFilters = [
+  function recursiveFilterColors(el: HTMLElement) {
+    const bg = el.style.backgroundColor;
+    if (bg !== "") {
+      const inverted = rgb(bg).map((i) => 255 - i);
+      el.style.backgroundColor = unrgb(inverted);
+    }
+  },
 
-function filterLinks(el: HTMLElement) {
-  if (el instanceof HTMLAnchorElement) {
-    const href = el.href;
-    if (href !== "") {
-      if (href.startsWith(window.location.origin)) {
-        const suffix = href.substring(window.location.origin.length);
-        if (suffix.endsWith("#Spanish") && suffix.startsWith("/wiki/")) {
-          const page = suffix.substring(6, suffix.length - 8);
-          el.classList.add("inlink");
-          el.href = "#" + page;
+  function recursiveFilterLinks(el: HTMLElement) {
+    if (el instanceof HTMLAnchorElement) {
+      const href = el.href;
+      if (href !== "") {
+        if (href.startsWith(window.location.origin)) {
+          const suffix = href.substring(window.location.origin.length);
+          if (suffix.endsWith("#Spanish") && suffix.startsWith("/wiki/")) {
+            const page = suffix.substring(6, suffix.length - 8);
+            el.classList.add("inlink");
+            el.href = "#" + page;
+          } else {
+            el.href = "https://en.wiktionary.org/" + suffix;
+            el.target = "_blank";
+          }
         } else {
-          el.href = "https://en.wiktionary.org/" + suffix;
           el.target = "_blank";
         }
-      } else {
-        el.target = "_blank";
       }
     }
-  }
-  Array.from(el.children).forEach((i) => filterLinks(i as HTMLElement));
+  },
+
+  function recursiveFilterHeaders(el: HTMLElement) {
+    if (el instanceof HTMLHeadingElement) {
+      el.dataset.h = el.innerText;
+    }
+  },
+] as const;
+
+function runRecursiveFilters(el: HTMLElement) {
+  recursiveFilters.forEach((fn) => fn(el));
+
+  Array.from(el.children).forEach((i) => runRecursiveFilters(i as HTMLElement));
 }
 
 const vosotrosFilterColumns = [1, 1, 1, 0, 0, 2, 4, 6, 5, 5, 5, 5, 5, 0, 6, 5, 5, 5, 5, 0, 6, 5, 5] as const;
@@ -193,8 +205,6 @@ function removeFromArray<T>(array: T[], ...elements: T[]) {
 // this includes pages with multiple "etymologies", for example `colmo`
 
 function spanishDefinitionLookup(page: HTMLElement, query: string, cleanup: () => void) {
-  const spanishPage = document.createElement("div");
-
   const spanishHeader = page.querySelector<HTMLElement>("h2 span#Spanish")?.parentElement;
   if (!spanishHeader) {
     if (activeQuery === query) {
@@ -206,39 +216,34 @@ function spanishDefinitionLookup(page: HTMLElement, query: string, cleanup: () =
     return;
   }
 
-  const spanishSection: HTMLElement[] = [];
+  const spanishSection: Element[] = delimitSection(spanishHeader);
+  Array.from(page.children)
+    .filter((i) => !spanishSection.includes(i))
+    .forEach((i) => i.remove());
+
+  runRecursiveFilters(page);
 
   const searchHeader = document.createElement("h1");
   searchHeader.innerText = query;
-  spanishSection.push(searchHeader);
+  page.prepend(searchHeader);
 
-  spanishSection.push(...delimitSection(spanishHeader));
-
-  spanishSection.forEach((el) => spanishPage.appendChild(el));
-  // I'm not sure how the javascript GC and DOM stuff works, but just in case clean up the stuff we're not using
-  page.remove();
-  page = spanishPage;
-
-  const pronuncationTitle = spanishSection.find((el) => el.nodeName == "H3" && el.innerText == "Pronunciation");
+  const pronuncationTitle = page.querySelector<HTMLElement>("h3[data-h=Pronunciation]");
   if (pronuncationTitle) {
     const pronuncation = findPronuncation(pronuncationTitle, page);
 
     if (pronuncation) {
       // Remove the whole Pronuncation section
-      removeFromArray(spanishSection, pronuncationTitle, ...delimitSection(pronuncationTitle));
+      delimitSection(pronuncationTitle).forEach((i) => i.remove());
+      pronuncationTitle.remove();
 
       // Put the pronuncation directly in the title
       searchHeader.innerText = `<${query}> ${pronuncation}`;
     }
   }
 
-  filterColors(page);
-  filterLinks(page);
-
   const tables = Array.from(page.querySelectorAll(".NavContent")).filter(
     (i) => !i.parentElement?.classList.contains("phrasebook")
   );
-  console.log(tables);
   if (tables.length > 0) {
     const primaryTable = tables[0].firstElementChild as HTMLTableElement;
     filterVosotrosTable(primaryTable);
@@ -264,28 +269,33 @@ function spanishDefinitionLookup(page: HTMLElement, query: string, cleanup: () =
   // Load into page
   if (activeQuery === query) {
     cleanup();
-    spanishSection.forEach((el) => content.appendChild(el));
+    content.appendChild(page);
     document.title = `${query} | Spanish`;
   }
 }
 
 // TODO: fix for those random pages which have their translations on a separate page for some reason
 function englishTranslationLookup(page: HTMLElement, query: string, cleanup: () => void) {
-  const englishPage = document.createElement("div");
-  const englishHeader = page.querySelector<HTMLElement>("h2 span#English")!.parentElement!;
+  const rawQuery = query + "?";
+  const englishHeader = page.querySelector<HTMLElement>("h2 span#English")?.parentElement;
+  if (!englishHeader) {
+    if (activeQuery === rawQuery) {
+      const errorMessage = document.createElement("div");
+      errorMessage.innerText = "This page has no English entry!";
+      content.appendChild(errorMessage);
+      cleanup();
+    }
+    return;
+  }
 
-  const englishSection: HTMLElement[] = [];
+  const englishSection: Element[] = delimitSection(englishHeader);
+  Array.from(page.children)
+    .filter((i) => !englishSection.includes(i))
+    .forEach((i) => i.remove());
 
   const searchHeader = document.createElement("h1");
   searchHeader.innerText = query;
-  englishSection.push(searchHeader);
-
-  englishSection.push(...delimitSection(englishHeader));
-
-  englishSection.forEach((el) => englishPage.appendChild(el));
-  // I'm not sure how the javascript GC and DOM stuff works, but just in case clean up the stuff we're not using
-  page.remove();
-  page = englishPage;
+  page.prepend(searchHeader);
 
   const translationHeadings = page.querySelectorAll<HTMLElement>("[id^=Translations].mw-headline");
   const translationSections = Array.from(translationHeadings).flatMap((i) => delimitSection(i.parentElement!));
@@ -321,12 +331,22 @@ function englishTranslationLookup(page: HTMLElement, query: string, cleanup: () 
       });
     }
 
-    filterLinks(trElement);
+    runRecursiveFilters(trElement);
     trList.push(trElement);
   });
 
+  if (trList.length === 0) {
+    if (activeQuery === rawQuery) {
+      const errorMessage = document.createElement("div");
+      errorMessage.innerText = "This page has no translations!";
+      content.appendChild(errorMessage);
+      cleanup();
+    }
+    return;
+  }
+
   // Load into page
-  if (activeQuery === query + "?") {
+  if (activeQuery === rawQuery) {
     cleanup();
     trList.forEach((el) => content.appendChild(el));
     document.title = `${query}? | Spanish`;
@@ -398,7 +418,7 @@ function makeQuery(query: string) {
       }
       const html = json.parse.text;
 
-      let page = new DOMParser().parseFromString(html, "text/html").body;
+      let page = new DOMParser().parseFromString(html, "text/html").body.children[0] as HTMLElement;
 
       // Delete all [edit] links, this is just for viewing, not editing
       page.querySelectorAll(".mw-editsection").forEach((i) => i.remove());

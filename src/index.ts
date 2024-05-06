@@ -32,6 +32,27 @@ function unrgb(n: number[]) {
   return `rgb(${n.join(", ")})`;
 }
 
+const ANKI_VERSION = 6;
+type AnkiOk<T> = { result: T; error: null };
+type AnkiError = { result: null; error: string };
+type AnkiResponse<T> = AnkiOk<T> | AnkiError;
+async function invoke<T = object>(action: string, params: object = {}): Promise<T> {
+  const i = await fetch("http://127.0.0.1:8765", {
+    method: "POST",
+    body: JSON.stringify({
+      action,
+      params,
+      version: ANKI_VERSION,
+    }),
+  });
+  const json = (await i.json()) as AnkiResponse<T>;
+  if (json.error) {
+    throw json.error;
+  }
+  return json.result as T; // why, ts?
+}
+type AnkiPermissionResponse = { permission: "granted" | "denied" };
+
 function findPronuncation(pronuncationTitle: HTMLElement, page: HTMLElement): string | undefined {
   const pronuncationSection = pronuncationTitle.nextElementSibling! as HTMLElement;
   let pronuncationEntries: HTMLElement[] = Array.from(pronuncationSection.querySelectorAll("li")).filter((el) =>
@@ -205,6 +226,20 @@ function delimitSection(startHeader: HTMLElement): HTMLElement[] {
   return elements;
 }
 
+function delimitInlineSection(startHeader: HTMLElement): HTMLElement[] {
+  const elements: HTMLElement[] = [];
+  const level = startHeader.nodeName;
+  if (!isHeaderName(level)) {
+    throw new Error(`Cannot delimit non-header element ${level}`);
+  }
+  let next = startHeader.nextElementSibling as HTMLElement | null;
+  while (next !== null && !isHeaderName(next.nodeName)) {
+    elements.push(next);
+    next = next.nextElementSibling as HTMLElement | null;
+  }
+  return elements;
+}
+
 function removeFromArray<T>(array: T[], ...elements: T[]) {
   elements.forEach((e) => {
     const i = array.indexOf(e);
@@ -267,6 +302,7 @@ function spanishDefinitionLookup(page: HTMLElement, query: string, wikitext: str
     fetch(constructTemplateURL(templateLookup[1], query), {
       method: "GET",
       headers: headers,
+      signal: controller.signal,
     })
       .then((r) => r.json())
       .then((json) => {
@@ -357,6 +393,49 @@ function spanishDefinitionLookup(page: HTMLElement, query: string, wikitext: str
     const primaryTable = tables[0].firstElementChild as HTMLTableElement;
     filterVosotrosTable(primaryTable);
     filterCompactTable(primaryTable);
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  if (params.has("anki")) {
+    const headwords = page.querySelectorAll<HTMLElement>(".headword");
+    const duplicate = new Promise<boolean>((resolve) => {
+      if (headwords.length > 0) {
+        invoke<number[]>("findNotes", {
+          query: `"deck:Words from textbook" "Expression:${headwords[0].innerText}"`,
+        }).then((i) => {
+          console.log(i);
+          if (i.length === 0) resolve(true);
+        });
+      }
+    });
+    headwords.forEach((i) => {
+      const headwordLine = i.parentElement;
+      const headwordParagraph = headwordLine?.parentElement;
+      const list = headwordParagraph?.nextElementSibling;
+      if (!headwordLine || !headwordParagraph || !list) return;
+      if (list.nodeName !== "OL") return;
+      const firstEntry = list.firstElementChild as HTMLElement | null;
+      const primaryMeaning = firstEntry?.textContent?.split("\n")[0];
+      if (!primaryMeaning) return;
+
+      const link = document.createElement("input");
+      link.type = "button";
+      link.value = "+";
+      link.addEventListener("click", () => {
+        invoke("guiAddCards", {
+          note: {
+            deckName: "Words from textbook",
+            modelName: "Basic+Spanish",
+            fields: {
+              Expression: i.innerText,
+              Meaning: primaryMeaning,
+            },
+            tags: ["connect"],
+          },
+        });
+      });
+      duplicate.then(() => headwordLine.insertBefore(link, i));
+    });
   }
 
   // Load into page
@@ -552,6 +631,10 @@ addEventListener("load", () => {
 
   if (document.location.hash !== "") {
     makeQuery(decodeURIComponent(document.location.hash.substring(1)));
+  }
+
+  if (params.has("anki")) {
+    invoke<AnkiPermissionResponse>("requestPermission").then((i) => console.log(i.permission));
   }
 });
 

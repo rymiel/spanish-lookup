@@ -520,6 +520,11 @@ function makeQuery(query: string) {
 
 addEventListener("load", () => {
   form = document.getElementById("form") as HTMLFormElement;
+  const params = new URLSearchParams(window.location.search);
+  if (params.has("inline")) {
+    form.classList.add("hidden");
+  }
+
   queryBox = document.getElementById("query") as HTMLInputElement;
   content = document.getElementById("content") as HTMLDivElement;
   left = document.getElementById("leftMain") as HTMLDivElement;

@@ -102,6 +102,10 @@ body {
   }
 }
 
+.hidden {
+  display: none;
+}
+
 header,
 nav,
 footer,
@@ -244,6 +248,15 @@ table.quick td {
   width: 50%;
 }
 
+table.quick tr.gap td,
+table.quick tr.gap th {
+  padding-top: 1.5rem;
+}
+
+table.quick .footnote {
+  text-decoration: underline;
+}
+
 th,
 td {
   padding: 4px 12px 8px;
@@ -257,6 +270,10 @@ li:target {
 .hl {
   font-weight: bold;
   text-align: center;
+}
+
+summary h3 {
+  display: inline;
 }
 
 a:active,

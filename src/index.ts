@@ -6,9 +6,19 @@ let activeQuery: string;
 
 let controller = new AbortController();
 
+const headers = new Headers({
+  "Api-User-Agent": "Spanish-Lookup/1.0 (emilia@rymiel.space)",
+});
+
 function constructURL(query: string): string {
   const encoded = encodeURIComponent(query);
-  return `https://en.wiktionary.org/w/api.php?action=parse&page=${encoded}&prop=text&formatversion=2&origin=*&format=json`;
+  return `https://en.wiktionary.org/w/api.php?action=parse&page=${encoded}&prop=text|wikitext&formatversion=2&origin=*&format=json`;
+}
+
+function constructTemplateURL(template: string, title: string): string {
+  const encodedTempl = encodeURIComponent(template);
+  const encodedTitle = encodeURIComponent(title);
+  return `https://en.wiktionary.org/w/api.php?action=expandtemplates&title=${encodedTitle}&text={{${encodedTempl}|json=1}}&prop=wikitext&formatversion=2&origin=*&format=json`;
 }
 
 function rgb(s: string): number[] {
@@ -141,21 +151,24 @@ function filterCompactTable(table: HTMLTableElement) {
   }
 }
 
-const pronouns = ["yo", "tú", "vos", "él", "nosotros", "ustedes"] as const;
-
-function buildTable(a: readonly string[], b: readonly string[]) {
+function buildTable(a: readonly string[], b: readonly Node[]) {
   const formTable = document.createElement("table");
   formTable.className = "quick";
 
   a.forEach((_, i) => {
     const tr = document.createElement("tr");
 
+    let aText = a[i];
+    if (aText.startsWith("!")) {
+      aText = aText.substring(1);
+      tr.classList.add("gap");
+    }
     const tda = document.createElement("th");
-    tda.innerText = a[i];
+    tda.innerText = aText;
     tr.appendChild(tda);
 
     const tdb = document.createElement("td");
-    tdb.innerText = b[i];
+    tdb.appendChild(b[i]);
     tr.appendChild(tdb);
 
     formTable.appendChild(tr);
@@ -201,10 +214,92 @@ function removeFromArray<T>(array: T[], ...elements: T[]) {
   });
 }
 
+const PRONOUNS = [
+  "yo",
+  "tú",
+  "vos",
+  "ella",
+  "nosotros",
+  "ustedes",
+  "!p. yo",
+  "p. vos",
+  "p. ella",
+  "p. nosotros",
+  "p. ustedes",
+  "!subj.",
+] as const;
+const FORMS = [
+  "pres_1s",
+  "pres_2s",
+  "pres_2sv",
+  "pres_3s",
+  "pres_1p",
+  "pres_3p",
+  "pret_1s",
+  "pret_2s",
+  "pret_3s",
+  "pret_1p",
+  "pret_3p",
+  "pres_sub_1s",
+] as const;
+type EsConjForm = (typeof FORMS)[number];
+interface EsConjEntry {
+  form: string;
+  footnotes?: string[];
+}
+interface EsConjJson {
+  forms: Record<EsConjForm, EsConjEntry[]>;
+}
+
 // TODO: nicer layout of pages with multiple definitions (i.e. jump to definition)
 // this includes pages with multiple "etymologies", for example `colmo`
 
-function spanishDefinitionLookup(page: HTMLElement, query: string, cleanup: () => void) {
+const esConjRegex = /{{(es-conj[^}]*?)}}/;
+
+function spanishDefinitionLookup(page: HTMLElement, query: string, wikitext: string, cleanup: () => void) {
+  // console.log(wikitext);
+  const templateLookup = esConjRegex.exec(wikitext);
+  console.log(templateLookup);
+  if (templateLookup && templateLookup[1]) {
+    const loader = document.createElement("div");
+    loader.className = "loader";
+    left.appendChild(loader);
+    fetch(constructTemplateURL(templateLookup[1], query), {
+      method: "GET",
+      headers: headers,
+    })
+      .then((r) => r.json())
+      .then((json) => {
+        // console.log(json);
+        const innerJson = JSON.parse(json.expandtemplates.wikitext) as EsConjJson;
+        console.log(innerJson);
+
+        // TODO: include footnotes
+        const forms = FORMS.map((i) => {
+          const div = document.createElement("div");
+          innerJson.forms[i]
+            .map((j) => {
+              const span = document.createElement("span");
+              span.innerText = j.form;
+              if (j.footnotes) {
+                span.title = j.footnotes.join(", ");
+                span.classList.add("footnote");
+              }
+              return span;
+            })
+            .forEach((span, i) => {
+              if (i > 0) div.append(", ");
+              div.appendChild(span);
+            });
+          return div;
+        });
+
+        const formTable = buildTable(PRONOUNS, forms);
+        loader.remove();
+        left.appendChild(formTable);
+      });
+  }
+
   const spanishHeader = page.querySelector<HTMLElement>("h2 span#Spanish")?.parentElement;
   if (!spanishHeader) {
     if (activeQuery === query) {
@@ -248,22 +343,6 @@ function spanishDefinitionLookup(page: HTMLElement, query: string, cleanup: () =
     const primaryTable = tables[0].firstElementChild as HTMLTableElement;
     filterVosotrosTable(primaryTable);
     filterCompactTable(primaryTable);
-    const presentIndicative = primaryTable.rows[8];
-    const piForms = Array.from(presentIndicative.querySelectorAll("span")).map((i) => i.innerText);
-    // drop the "present" label
-    piForms.splice(0, 1);
-    // just make a special case for hay
-    // TODO: actually care about each element in each table cell
-    if (piForms[3] === "hay") {
-      piForms.splice(3, 1);
-      piForms.splice(1, 0, piForms[1]);
-    } else if (piForms.length === 5) {
-      // vos and tú forms are the same, duplicate it
-      piForms.splice(1, 0, piForms[1]);
-    }
-
-    const piTable = buildTable(pronouns, piForms);
-    left.appendChild(piTable);
   }
 
   // Load into page
@@ -393,9 +472,7 @@ function makeQuery(query: string) {
   fetch(constructURL(query), {
     method: "GET",
     signal: controller.signal,
-    headers: new Headers({
-      "Api-User-Agent": "Spanish-Lookup/1.0 (emilia@rymiel.space)",
-    }),
+    headers: headers,
   })
     .then((r) => r.json())
     .then((json) => {
@@ -417,6 +494,7 @@ function makeQuery(query: string) {
         return;
       }
       const html = json.parse.text;
+      const wikitext = json.parse.wikitext;
 
       let page = new DOMParser().parseFromString(html, "text/html").body.children[0] as HTMLElement;
 
@@ -429,7 +507,7 @@ function makeQuery(query: string) {
       if (isTranslationLookup) {
         englishTranslationLookup(page, query, cleanup);
       } else {
-        spanishDefinitionLookup(page, query, cleanup);
+        spanishDefinitionLookup(page, query, wikitext, cleanup);
       }
     })
     .catch((err) => {

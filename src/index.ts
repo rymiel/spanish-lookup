@@ -336,6 +336,20 @@ function spanishDefinitionLookup(page: HTMLElement, query: string, wikitext: str
     }
   }
 
+  const etymologyTitle = page.querySelector<HTMLElement>("h3[data-h=Etymology]");
+  if (etymologyTitle) {
+    const content = delimitSection(etymologyTitle);
+
+    const details = document.createElement("details");
+    etymologyTitle.insertAdjacentElement("afterend", details);
+
+    const summary = document.createElement("summary");
+    details.insertAdjacentElement("afterbegin", summary);
+
+    summary.appendChild(etymologyTitle);
+    content.forEach((i) => details.appendChild(i));
+  }
+
   const tables = Array.from(page.querySelectorAll(".NavFrame .NavContent")).filter((i) =>
     (i.previousElementSibling as HTMLElement).textContent?.trim().startsWith("Conjugation of")
   );

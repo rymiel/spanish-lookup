@@ -241,8 +241,8 @@ function spanishDefinitionLookup(page: HTMLElement, query: string, cleanup: () =
     }
   }
 
-  const tables = Array.from(page.querySelectorAll(".NavContent")).filter(
-    (i) => !i.parentElement?.classList.contains("phrasebook")
+  const tables = Array.from(page.querySelectorAll(".NavFrame .NavContent")).filter((i) =>
+    (i.previousElementSibling as HTMLElement).textContent?.trim().startsWith("Conjugation of")
   );
   if (tables.length > 0) {
     const primaryTable = tables[0].firstElementChild as HTMLTableElement;

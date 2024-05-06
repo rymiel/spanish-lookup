@@ -626,11 +626,11 @@ addEventListener("load", () => {
     event.preventDefault();
     const query = queryBox.value;
 
-    makeQuery(query);
+    makeQuery(query.toLowerCase());
   });
 
   if (document.location.hash !== "") {
-    makeQuery(decodeURIComponent(document.location.hash.substring(1)));
+    makeQuery(decodeURIComponent(document.location.hash.substring(1).toLowerCase()));
   }
 
   if (params.has("anki")) {
@@ -640,6 +640,6 @@ addEventListener("load", () => {
 
 addEventListener("hashchange", () => {
   if (document.location.hash !== "") {
-    makeQuery(decodeURIComponent(document.location.hash.substring(1)));
+    makeQuery(decodeURIComponent(document.location.hash.substring(1).toLowerCase()));
   }
 });

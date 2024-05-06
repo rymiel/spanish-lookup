@@ -336,9 +336,9 @@ function spanishDefinitionLookup(page: HTMLElement, query: string, wikitext: str
     }
   }
 
-  const etymologyTitle = page.querySelector<HTMLElement>("h3[data-h=Etymology]");
-  if (etymologyTitle) {
-    const content = delimitSection(etymologyTitle);
+  const etymologyTitles = page.querySelectorAll<HTMLElement>("h3[data-h^=Etymology]");
+  etymologyTitles.forEach((etymologyTitle) => {
+    const content = delimitInlineSection(etymologyTitle);
 
     const details = document.createElement("details");
     etymologyTitle.insertAdjacentElement("afterend", details);
@@ -348,7 +348,7 @@ function spanishDefinitionLookup(page: HTMLElement, query: string, wikitext: str
 
     summary.appendChild(etymologyTitle);
     content.forEach((i) => details.appendChild(i));
-  }
+  });
 
   const tables = Array.from(page.querySelectorAll(".NavFrame .NavContent")).filter((i) =>
     (i.previousElementSibling as HTMLElement).textContent?.trim().startsWith("Conjugation of")

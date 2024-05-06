@@ -403,7 +403,6 @@ function spanishDefinitionLookup(page: HTMLElement, query: string, wikitext: str
         invoke<number[]>("findNotes", {
           query: `"deck:Words from textbook" "Expression:${headwords[0].innerText}"`,
         }).then((i) => {
-          console.log(i);
           if (i.length === 0) resolve(true);
         });
       }
@@ -411,6 +410,8 @@ function spanishDefinitionLookup(page: HTMLElement, query: string, wikitext: str
     headwords.forEach((i) => {
       const headwordLine = i.parentElement;
       const headwordParagraph = headwordLine?.parentElement;
+      let previousHeader = headwordParagraph?.previousElementSibling as HTMLElement | null;
+      if (previousHeader?.nodeName !== "H3") previousHeader = null;
       const gender = headwordLine?.querySelector(".gender");
       const list = headwordParagraph?.nextElementSibling;
       if (!headwordLine || !headwordParagraph || !list) return;
@@ -430,7 +431,9 @@ function spanishDefinitionLookup(page: HTMLElement, query: string, wikitext: str
             fields: {
               Expression: i.innerText,
               Meaning: primaryMeaning,
-              Notes: gender?.textContent ?? undefined,
+              Notes: [previousHeader?.innerText.toLowerCase() ?? undefined, gender?.textContent ?? undefined]
+                .filter((i) => i !== undefined)
+                .join(" "),
             },
             tags: ["connect"],
           },

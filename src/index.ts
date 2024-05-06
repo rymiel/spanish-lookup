@@ -411,6 +411,7 @@ function spanishDefinitionLookup(page: HTMLElement, query: string, wikitext: str
     headwords.forEach((i) => {
       const headwordLine = i.parentElement;
       const headwordParagraph = headwordLine?.parentElement;
+      const gender = headwordLine?.querySelector(".gender");
       const list = headwordParagraph?.nextElementSibling;
       if (!headwordLine || !headwordParagraph || !list) return;
       if (list.nodeName !== "OL") return;
@@ -429,6 +430,7 @@ function spanishDefinitionLookup(page: HTMLElement, query: string, wikitext: str
             fields: {
               Expression: i.innerText,
               Meaning: primaryMeaning,
+              Notes: gender?.textContent ?? undefined,
             },
             tags: ["connect"],
           },

@@ -411,7 +411,7 @@ function spanishDefinitionLookup(page: HTMLElement, query: string, wikitext: str
       const headwordLine = i.parentElement;
       const headwordParagraph = headwordLine?.parentElement;
       let previousHeader = headwordParagraph?.previousElementSibling as HTMLElement | null;
-      if (previousHeader?.nodeName !== "H3") previousHeader = null;
+      if (previousHeader?.nodeName !== "H3" && previousHeader?.nodeName !== "H4") previousHeader = null;
       const gender = headwordLine?.querySelector(".gender");
       const list = headwordParagraph?.nextElementSibling;
       if (!headwordLine || !headwordParagraph || !list) return;

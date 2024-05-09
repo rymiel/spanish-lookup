@@ -11,8 +11,8 @@ const headers = new Headers({
 });
 
 const frequencies: Record<string, number>[] = [];
-const KNOWN_FREQS = ["lemmafreq", "bookfreq", "bookcount"] as const;
-const FREQ_NAMES = ["total", "book", "(count)"] as const;
+const KNOWN_FREQS = ["bookfreq", "bookcount"] as const;
+const FREQ_NAMES = ["book", "(count)"] as const;
 
 function constructURL(query: string): string {
   const encoded = encodeURIComponent(query);

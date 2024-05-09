@@ -276,6 +276,14 @@ summary h3 {
   display: inline;
 }
 
+.freqlist {
+  text-align: center;
+}
+
+.freqlist span {
+  margin-right: 0.5rem;
+}
+
 a:active,
 a:hover {
   color: #ed89a9;

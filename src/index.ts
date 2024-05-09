@@ -10,6 +10,10 @@ const headers = new Headers({
   "Api-User-Agent": "Spanish-Lookup/1.0 (emilia@rymiel.space)",
 });
 
+const frequencies: Record<string, number>[] = [];
+const KNOWN_FREQS = ["lemmafreq", "bookfreq", "bookcount"] as const;
+const FREQ_NAMES = ["total", "book", "(count)"] as const;
+
 function constructURL(query: string): string {
   const encoded = encodeURIComponent(query);
   return `https://en.wiktionary.org/w/api.php?action=parse&page=${encoded}&prop=text|wikitext&formatversion=2&origin=*&format=json`;
@@ -372,6 +376,25 @@ function spanishDefinitionLookup(page: HTMLElement, query: string, wikitext: str
     }
   }
 
+  const params = new URLSearchParams(window.location.search);
+  if (params.has("freq")) {
+    const container = document.createElement("div");
+    container.classList.add("freqlist");
+    searchHeader.insertAdjacentElement("afterend", container);
+
+    KNOWN_FREQS.forEach((id, i) => {
+      const freq = frequencies[i];
+      const name = FREQ_NAMES[i];
+      const value = freq[query] as number | undefined;
+      if (value) {
+        const el = document.createElement("span");
+        el.innerText = `${name}: ${value}`;
+        el.title = id;
+        container.insertAdjacentElement("beforeend", el);
+      }
+    });
+  }
+
   const etymologyTitles = page.querySelectorAll<HTMLElement>("h3[data-h^=Etymology]");
   etymologyTitles.forEach((etymologyTitle) => {
     const content = delimitInlineSection(etymologyTitle);
@@ -395,7 +418,6 @@ function spanishDefinitionLookup(page: HTMLElement, query: string, wikitext: str
     filterCompactTable(primaryTable);
   }
 
-  const params = new URLSearchParams(window.location.search);
   if (params.has("anki")) {
     const headwords = page.querySelectorAll<HTMLElement>(".headword");
     const duplicate = new Promise<boolean>((resolve) => {
@@ -640,6 +662,15 @@ addEventListener("load", () => {
 
   if (params.has("anki")) {
     invoke<AnkiPermissionResponse>("requestPermission").then((i) => console.log(i.permission));
+  }
+
+  if (params.has("freq")) {
+    KNOWN_FREQS.forEach((key) => {
+      fetch(`/freq/${key}.json`)
+        .then((i) => i.json())
+        .then((i) => frequencies.push(i))
+        .catch(() => frequencies.push({}));
+    });
   }
 });
 

@@ -54,7 +54,7 @@ body {
   text-align: center;
 }
 
-@media (max-width: 1120px) {
+@media (max-width: 1440px) {
   #center {
     grid-template-columns: repeat(7, 1fr);
   }

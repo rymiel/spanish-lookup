@@ -11,8 +11,8 @@ const headers = new Headers({
 });
 
 const frequencies: Record<string, number>[] = [];
-const KNOWN_FREQS = ["bookfreq", "bookcount"] as const;
-const FREQ_NAMES = ["book", "(count)"] as const;
+const KNOWN_FREQS = ["ciudad"] as const;
+const VARIANTS = ["-freq", "-count"] as const;
 
 function constructURL(query: string): string {
   const encoded = encodeURIComponent(query);
@@ -383,15 +383,18 @@ function spanishDefinitionLookup(page: HTMLElement, query: string, wikitext: str
     searchHeader.insertAdjacentElement("afterend", container);
 
     KNOWN_FREQS.forEach((id, i) => {
-      const freq = frequencies[i];
-      const name = FREQ_NAMES[i];
-      const value = freq[query] as number | undefined;
-      if (value) {
-        const el = document.createElement("span");
-        el.innerText = `${name}: ${value}`;
-        el.title = id;
-        container.insertAdjacentElement("beforeend", el);
-      }
+      if (i > 0) container.insertAdjacentElement("beforeend", document.createElement("br"));
+
+      const freq = frequencies[i * 2];
+      const count = frequencies[i * 2 + 1];
+      const freqValue = (freq[query] as number | undefined)?.toString() ?? "?";
+      const countValue = (count[query] as number | undefined)?.toString() ?? "?";
+      const freqEl = document.createElement("span");
+      freqEl.innerText = `${id}: ${freqValue}`;
+      container.insertAdjacentElement("beforeend", freqEl);
+      const countEl = document.createElement("span");
+      countEl.innerText = `(count): ${countValue}`;
+      container.insertAdjacentElement("beforeend", countEl);
     });
   }
 
@@ -666,10 +669,12 @@ addEventListener("load", () => {
 
   if (params.has("freq")) {
     KNOWN_FREQS.forEach((key) => {
-      fetch(`/freq/${key}.json`)
-        .then((i) => i.json())
-        .then((i) => frequencies.push(i))
-        .catch(() => frequencies.push({}));
+      VARIANTS.forEach((suffix) => {
+        fetch(`/freq/${key}${suffix}.json`)
+          .then((i) => i.json())
+          .then((i) => frequencies.push(i))
+          .catch(() => frequencies.push({}));
+      });
     });
   }
 });

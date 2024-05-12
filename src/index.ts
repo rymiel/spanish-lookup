@@ -10,7 +10,7 @@ const headers = new Headers({
   "Api-User-Agent": "Spanish-Lookup/1.0 (emilia@rymiel.space)",
 });
 
-const frequencies: Record<string, number>[] = [];
+const frequencies: Map<string, Record<string, number>> = new Map();
 const KNOWN_FREQS = ["ciudad"] as const;
 const VARIANTS = ["-freq", "-count"] as const;
 
@@ -385,10 +385,10 @@ function spanishDefinitionLookup(page: HTMLElement, query: string, wikitext: str
     KNOWN_FREQS.forEach((id, i) => {
       if (i > 0) container.insertAdjacentElement("beforeend", document.createElement("br"));
 
-      const freq = frequencies[i * 2];
-      const count = frequencies[i * 2 + 1];
-      const freqValue = (freq[query] as number | undefined)?.toString() ?? "?";
-      const countValue = (count[query] as number | undefined)?.toString() ?? "?";
+      const freq = frequencies.get(`${id}-freq`);
+      const count = frequencies.get(`${id}-count`);
+      const freqValue = freq?.[query]?.toString() ?? "?";
+      const countValue = count?.[query]?.toString() ?? "?";
       const freqEl = document.createElement("span");
       freqEl.innerText = `${id}: ${freqValue}`;
       container.insertAdjacentElement("beforeend", freqEl);
@@ -674,9 +674,9 @@ addEventListener("load", () => {
           try {
             const res = await fetch(`/freq/${key}${suffix}.json`);
             const json = await res.json();
-            frequencies.push(json);
+            frequencies.set(`${key}${suffix}`, json);
           } catch {
-            frequencies.push({});
+            frequencies.set(`${key}${suffix}`, {});
           }
         }
       }

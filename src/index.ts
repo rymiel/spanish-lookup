@@ -387,8 +387,8 @@ function spanishDefinitionLookup(page: HTMLElement, query: string, wikitext: str
 
       const freq = frequencies.get(`${id}-freq`);
       const count = frequencies.get(`${id}-count`);
-      const freqValue = freq?.[query]?.toString() ?? "?";
-      const countValue = count?.[query]?.toString() ?? "?";
+      const freqValue = freq ? (freq[query] ?? 0).toString() : "?";
+      const countValue = count ? (count[query] ?? 0).toString() : "?";
       const freqEl = document.createElement("span");
       freqEl.innerText = `${id}: ${freqValue}`;
       container.insertAdjacentElement("beforeend", freqEl);

@@ -11,7 +11,7 @@ const headers = new Headers({
 });
 
 const frequencies: Map<string, Record<string, number>> = new Map();
-const KNOWN_FREQS = ["ciudad"] as const;
+const KNOWN_FREQS = ["ciudad", "hobbit"] as const;
 const VARIANTS = ["-freq", "-count"] as const;
 
 function constructURL(query: string): string {

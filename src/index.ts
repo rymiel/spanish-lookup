@@ -668,14 +668,19 @@ addEventListener("load", () => {
   }
 
   if (params.has("freq")) {
-    KNOWN_FREQS.forEach((key) => {
-      VARIANTS.forEach((suffix) => {
-        fetch(`/freq/${key}${suffix}.json`)
-          .then((i) => i.json())
-          .then((i) => frequencies.push(i))
-          .catch(() => frequencies.push({}));
-      });
-    });
+    (async () => {
+      for (const key of KNOWN_FREQS) {
+        for (const suffix of VARIANTS) {
+          try {
+            const res = await fetch(`/freq/${key}${suffix}.json`);
+            const json = await res.json();
+            frequencies.push(json);
+          } catch {
+            frequencies.push({});
+          }
+        }
+      }
+    })();
   }
 });
 

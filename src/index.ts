@@ -58,7 +58,7 @@ async function invoke<T = object>(action: string, params: object = {}): Promise<
 type AnkiPermissionResponse = { permission: "granted" | "denied" };
 
 function findPronuncation(pronuncationTitle: HTMLElement, page: HTMLElement): string | undefined {
-  const pronuncationSection = pronuncationTitle.nextElementSibling! as HTMLElement;
+  const pronuncationSection = pronuncationTitle.parentElement!.nextElementSibling! as HTMLElement;
   let pronuncationEntries: HTMLElement[] = Array.from(pronuncationSection.querySelectorAll("li")).filter((el) =>
     el.innerText.startsWith("IPA")
   );
@@ -206,24 +206,32 @@ function isHeaderName(str: string) {
   return str === "H1" || str === "H2" || str === "H3" || str === "H4" || str === "H5";
 }
 
-function equalOrHigherLevel(base: string, other: string) {
-  if (!isHeaderName(base) || !isHeaderName(other)) {
+function isHeader(el: HTMLElement): boolean {
+  return (
+    (el.classList.contains("mw-heading") && el.firstElementChild && isHeaderName(el.firstElementChild.nodeName)) ??
+    false
+  );
+}
+
+function equalOrHigherLevel(base: HTMLElement, other: HTMLElement) {
+  if (!isHeader(base) || !isHeader(other)) {
     return false;
   }
 
-  const baseLevel = parseInt(base[1]);
-  const otherLevel = parseInt(other[1]);
+  const baseLevel = parseInt(base.firstElementChild!.nodeName[1]);
+  const otherLevel = parseInt(other.firstElementChild!.nodeName[1]);
   return otherLevel <= baseLevel;
 }
 
-function delimitSection(startHeader: HTMLElement): HTMLElement[] {
+function delimitSection(headerContainer: HTMLElement): HTMLElement[] {
   const elements: HTMLElement[] = [];
-  const level = startHeader.nodeName;
-  if (!isHeaderName(level)) {
-    throw new Error(`Cannot delimit non-header element ${level}`);
+  if (isHeaderName(headerContainer.nodeName)) {
+    headerContainer = headerContainer.parentElement!;
+  } else if (!isHeader(headerContainer)) {
+    throw new Error(`Cannot delimit non-header element ${headerContainer}`);
   }
-  let next = startHeader.nextElementSibling as HTMLElement | null;
-  while (next !== null && !equalOrHigherLevel(level, next.nodeName)) {
+  let next = headerContainer.nextElementSibling as HTMLElement | null;
+  while (next !== null && !equalOrHigherLevel(headerContainer, next)) {
     elements.push(next);
     next = next.nextElementSibling as HTMLElement | null;
   }
@@ -340,7 +348,7 @@ function spanishDefinitionLookup(page: HTMLElement, query: string, wikitext: str
       });
   }
 
-  const spanishHeader = page.querySelector<HTMLElement>("h2 span#Spanish")?.parentElement;
+  const spanishHeader = page.querySelector<HTMLElement>("h2#Spanish")?.parentElement;
   if (!spanishHeader) {
     if (activeQuery === query) {
       const errorMessage = document.createElement("div");
@@ -479,7 +487,7 @@ function spanishDefinitionLookup(page: HTMLElement, query: string, wikitext: str
 // TODO: fix for those random pages which have their translations on a separate page for some reason
 function englishTranslationLookup(page: HTMLElement, query: string, cleanup: () => void) {
   const rawQuery = query + "?";
-  const englishHeader = page.querySelector<HTMLElement>("h2 span#English")?.parentElement;
+  const englishHeader = page.querySelector<HTMLElement>("h2#English")?.parentElement;
   if (!englishHeader) {
     if (activeQuery === rawQuery) {
       const errorMessage = document.createElement("div");

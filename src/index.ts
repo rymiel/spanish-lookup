@@ -443,7 +443,8 @@ function spanishDefinitionLookup(page: HTMLElement, query: string, wikitext: str
     headwords.forEach((i) => {
       const headwordLine = i.parentElement;
       const headwordParagraph = headwordLine?.parentElement;
-      let previousHeader = headwordParagraph?.previousElementSibling as HTMLElement | null;
+      let previousHeaderContainer = headwordParagraph?.previousElementSibling;
+      let previousHeader = previousHeaderContainer?.firstElementChild as HTMLElement | null;
       if (previousHeader?.nodeName !== "H3" && previousHeader?.nodeName !== "H4") previousHeader = null;
       const gender = headwordLine?.querySelector(".gender");
       const list = headwordParagraph?.nextElementSibling;

@@ -11,7 +11,6 @@ const headers = new Headers({
 });
 
 const frequencies: Map<string, Record<string, number>> = new Map();
-const KNOWN_FREQS = ["ciudad", "hobbit"] as const;
 const VARIANTS = ["-freq", "-count"] as const;
 
 function constructURL(query: string): string {
@@ -385,12 +384,13 @@ function spanishDefinitionLookup(page: HTMLElement, query: string, wikitext: str
   }
 
   const params = new URLSearchParams(window.location.search);
-  if (params.has("freq")) {
+  const freqs = params.get("freq");
+  if (freqs !== null) {
     const container = document.createElement("div");
     container.classList.add("freqlist");
     searchHeader.insertAdjacentElement("afterend", container);
 
-    KNOWN_FREQS.forEach((id, i) => {
+    freqs.split(",").forEach((id, i) => {
       if (i > 0) container.insertAdjacentElement("beforeend", document.createElement("br"));
 
       const freq = frequencies.get(`${id}-freq`);
@@ -676,9 +676,10 @@ addEventListener("load", () => {
     invoke<AnkiPermissionResponse>("requestPermission").then((i) => console.log(i.permission));
   }
 
-  if (params.has("freq")) {
+  const freqs = params.get("freq");
+  if (freqs !== null) {
     (async () => {
-      for (const key of KNOWN_FREQS) {
+      for (const key of freqs.split(",")) {
         for (const suffix of VARIANTS) {
           try {
             const res = await fetch(`/freq/${key}${suffix}.json`);

@@ -537,7 +537,11 @@ function makeQuery(rawQuery: string) {
   const isTranslationLookup = rawQuery.endsWith("?");
   const query = isTranslationLookup ? rawQuery.substring(0, rawQuery.length - 1) : rawQuery;
 
-  loadQuickResults(query, rawQuery, loaders.quickLoader, params);
+  if (isTranslationLookup) {
+    loaders.quickLoader.remove();
+  } else {
+    loadQuickResults(query, rawQuery, loaders.quickLoader, params);
+  }
 
   controller.abort();
   controller = new AbortController();

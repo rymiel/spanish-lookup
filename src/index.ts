@@ -326,6 +326,16 @@ function trimConjugationTables(page: HTMLElement) {
   }
 }
 
+function removeReferences(page: HTMLElement) {
+  const referenceTitles = ["References", "Further reading"].flatMap((i) => [
+    ...page.querySelectorAll<HTMLElement>(`[data-h='${i}']`),
+  ]);
+  referenceTitles.forEach((referenceTitle) => {
+    delimitSection(referenceTitle).forEach((i) => i.remove());
+    referenceTitle.remove();
+  });
+}
+
 function renderSpanishDefinition(
   page: HTMLElement,
   query: string,
@@ -353,6 +363,7 @@ function renderSpanishDefinition(
   addFrequencyList(searchHeader, query, params);
   collapseEtymologies(page);
   trimConjugationTables(page);
+  removeReferences(page);
   if (params.has("anki")) {
     addAnkiButtons(page);
   }

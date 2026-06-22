@@ -62,7 +62,7 @@ type AnkiPermissionResponse = { permission: "granted" | "denied" };
 function findPronuncation(pronuncationTitle: HTMLElement, page: HTMLElement): string | undefined {
   const pronuncationSection = pronuncationTitle.parentElement!.nextElementSibling! as HTMLElement;
   let pronuncationEntries: HTMLElement[] = Array.from(pronuncationSection.querySelectorAll("li")).filter((el) =>
-    el.innerText.startsWith("IPA")
+    el.innerText.startsWith("IPA"),
   );
   const switcherEntries = Array.from(page.querySelectorAll(".vsSwitcher > .vsHide > ul > li")) as HTMLElement[];
 
@@ -77,29 +77,21 @@ function findPronuncation(pronuncationTitle: HTMLElement, page: HTMLElement): st
   const correctPronuncation =
     pronuncationEntries.length === 1
       ? pronuncationEntries[0]
-      : pronuncationEntries.find((el) => {
-          const inner = el.innerText;
-          return inner.includes("(Buenos Aires and environs)") || inner.includes("(Latin America)");
-        });
+      : (pronuncationEntries.find((el) => el.innerText.includes("Buenos Aires")) ??
+        pronuncationEntries.find((el) => el.innerText.includes("Latin America")));
 
   if (correctPronuncation === undefined) {
     console.error(
       `Couldn't find the correct pronuncation from the choices ${pronuncationEntries
         .map((el) => el.innerText)
-        .join(", ")}`
+        .join(", ")}`,
     );
 
     return undefined;
   } else {
     // Extract just the IPA. There's some jank here to account for words which do not vary by region. Those
     // are formatted slightly differently by wiktionary.
-    const parts = correctPronuncation.innerText.split(")", 3);
-    let pronuncationText = parts[parts.length - 1].trim();
-    if (pronuncationText.startsWith(":")) {
-      pronuncationText = pronuncationText.substring(1).trim();
-    }
-
-    return pronuncationText;
+    return correctPronuncation.innerText.split("(", 3)[1].trim().substring(5).trim();
   }
 }
 
@@ -238,29 +230,6 @@ function delimitSection(headerContainer: HTMLElement): HTMLElement[] {
     next = next.nextElementSibling as HTMLElement | null;
   }
   return elements;
-}
-
-function delimitInlineSection(startHeader: HTMLElement): HTMLElement[] {
-  const elements: HTMLElement[] = [];
-  const level = startHeader.nodeName;
-  if (!isHeaderName(level)) {
-    throw new Error(`Cannot delimit non-header element ${level}`);
-  }
-  let next = startHeader.nextElementSibling as HTMLElement | null;
-  while (next !== null && !isHeaderName(next.nodeName)) {
-    elements.push(next);
-    next = next.nextElementSibling as HTMLElement | null;
-  }
-  return elements;
-}
-
-function removeFromArray<T>(array: T[], ...elements: T[]) {
-  elements.forEach((e) => {
-    const i = array.indexOf(e);
-    if (i !== -1) {
-      array.splice(i, 1);
-    }
-  });
 }
 
 const PRONOUNS = [
@@ -411,7 +380,7 @@ function spanishDefinitionLookup(page: HTMLElement, query: string, wikitext: str
 
   const etymologyTitles = page.querySelectorAll<HTMLElement>("h3[data-h^=Etymology]");
   etymologyTitles.forEach((etymologyTitle) => {
-    const content = delimitInlineSection(etymologyTitle);
+    const content = delimitSection(etymologyTitle);
 
     const details = document.createElement("details");
     etymologyTitle.insertAdjacentElement("afterend", details);
@@ -424,7 +393,7 @@ function spanishDefinitionLookup(page: HTMLElement, query: string, wikitext: str
   });
 
   const tables = Array.from(page.querySelectorAll(".NavFrame .NavContent")).filter((i) =>
-    (i.previousElementSibling as HTMLElement).textContent?.trim().startsWith("Conjugation of")
+    (i.previousElementSibling as HTMLElement).textContent?.trim().startsWith("Conjugation of"),
   );
   if (tables.length > 0) {
     const primaryTable = tables[0].firstElementChild as HTMLTableElement;

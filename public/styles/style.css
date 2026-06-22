@@ -325,3 +325,11 @@ input#query {
     transform: rotate(360deg);
   }
 }
+
+main .interproject-box {
+  background-color: #212121 !important;
+}
+
+.interProject {
+  display: none;
+}

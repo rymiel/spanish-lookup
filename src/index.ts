@@ -376,9 +376,15 @@ function renderSpanishDefinition(
 }
 
 function buildTranslationBlock(navFrame: HTMLElement): HTMLElement | null {
-  if (navFrame.className !== "NavFrame") return null;
+  if (!navFrame.classList.contains("NavFrame")) return null;
   const navHeader = navFrame.firstElementChild as HTMLElement;
   if (navHeader.className !== "NavHead") return null;
+  if (navFrame.classList.contains("pseudo")) {
+    const trElement = document.createElement("div");
+    trElement.classList.add("pseudo");
+    trElement.append(...navHeader.childNodes)
+    return trElement;
+  }
   const navContent = navFrame.lastElementChild;
   if (!(navContent instanceof HTMLElement) || navContent.className !== "NavContent") return null;
   if (navHeader.innerText === "Translations to be checked") return null;

@@ -341,3 +341,7 @@ main .interproject-box {
 .interProject {
   display: none;
 }
+
+.pseudo {
+  margin-left: 1rem;
+}

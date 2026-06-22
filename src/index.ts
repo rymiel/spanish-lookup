@@ -1,6 +1,9 @@
+import { loadStardict, lookup } from "./localdict.js";
+
 let form: HTMLFormElement;
 let queryBox: HTMLInputElement;
 let content: HTMLDivElement;
+let quickContent: HTMLDivElement;
 let left: HTMLDivElement;
 let activeQuery: string;
 
@@ -564,15 +567,21 @@ function englishTranslationLookup(page: HTMLElement, query: string, cleanup: () 
   }
 }
 
-function startLoading() {
+function startLoading(): [HTMLDivElement, HTMLDivElement] {
   // Clear previous results and create a spinner
   content.innerHTML = "";
+  quickContent.innerHTML = "";
   left.innerHTML = "";
+
+  const quickLoader = document.createElement("div");
+  quickLoader.className = "loader";
+  quickContent.appendChild(quickLoader);
+
   const loader = document.createElement("div");
   loader.className = "loader";
   content.appendChild(loader);
 
-  return loader;
+  return [quickLoader, loader];
 }
 
 function makeQuery(query: string) {
@@ -584,10 +593,11 @@ function makeQuery(query: string) {
   queryBox.value = query;
   window.location.hash = query;
   queryBox.disabled = true;
-  const loader = startLoading();
+  const [quickLoader, loader] = startLoading();
 
   const cleanup = () => {
     loader.remove();
+    quickLoader.remove();
     queryBox.disabled = false;
     queryBox.select();
     document.title = "Spanish";
@@ -597,6 +607,23 @@ function makeQuery(query: string) {
   const isTranslationLookup = query.endsWith("?");
   if (isTranslationLookup) {
     query = query.substring(0, query.length - 1);
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  if (params.has("star")) {
+    lookup(query).then((i) => {
+      quickLoader.remove();
+      i.forEach((m) => {
+        const h = document.createElement("h3");
+        h.innerText = m.word ?? "?";
+        quickContent.appendChild(h);
+        new DOMParser()
+          .parseFromString(m.data, "text/html")
+          .body.childNodes.forEach((n) => quickContent.appendChild(n));
+      });
+    });
+  } else {
+    quickLoader.remove();
   }
 
   controller.abort(); // Abort all existing queries
@@ -659,6 +686,7 @@ addEventListener("load", () => {
 
   queryBox = document.getElementById("query") as HTMLInputElement;
   content = document.getElementById("content") as HTMLDivElement;
+  quickContent = document.getElementById("quickContent") as HTMLDivElement;
   left = document.getElementById("leftMain") as HTMLDivElement;
 
   form.addEventListener("submit", (event) => {
@@ -691,6 +719,10 @@ addEventListener("load", () => {
         }
       }
     })();
+  }
+
+  if (params.has("star")) {
+    loadStardict().then(() => console.log("stardict loaded"));
   }
 });
 

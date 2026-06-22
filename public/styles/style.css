@@ -195,6 +195,10 @@ a.inlink {
   color: rgb(93, 207, 173);
 }
 
+a.einlink {
+  color: rgb(93, 207, 99);
+}
+
 a.new {
   color: #ba0000;
 }
@@ -318,7 +322,7 @@ input#query {
 }
 
 .loader.quick {
-  border-top: 0.5rem solid #d666ea;
+  border-top: 0.5rem solid #faf;
 }
 
 @keyframes spin {

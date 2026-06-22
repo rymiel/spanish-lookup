@@ -28,6 +28,10 @@ const recursiveFilters = [
             const page = suffix.substring(6, suffix.length - 8);
             el.classList.add("inlink");
             el.href = "#" + page;
+          } else if (suffix.endsWith("#Translations") && suffix.startsWith("/wiki/")) {
+            const page = suffix.substring(6).split("#")[0];
+            el.classList.add("einlink");
+            el.href = "#" + page + "?";
           } else {
             el.href = "https://en.wiktionary.org/" + suffix;
             el.target = "_blank";

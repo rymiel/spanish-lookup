@@ -317,6 +317,10 @@ input#query {
   margin: auto;
 }
 
+.loader.quick {
+  border-top: 0.5rem solid #d666ea;
+}
+
 @keyframes spin {
   0% {
     transform: rotate(0deg);

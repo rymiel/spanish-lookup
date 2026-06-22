@@ -455,7 +455,7 @@ function startLoading(): LoadingState {
   left.innerHTML = "";
 
   const quickLoader = document.createElement("div");
-  quickLoader.className = "loader";
+  quickLoader.className = "quick loader";
   quickContent.appendChild(quickLoader);
 
   const loader = document.createElement("div");

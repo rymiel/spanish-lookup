@@ -361,9 +361,9 @@ function renderSpanishDefinition(
 
   addPronunciationToHeader(page, query, searchHeader);
   addFrequencyList(searchHeader, query, params);
+  removeReferences(page);
   collapseEtymologies(page);
   trimConjugationTables(page);
-  removeReferences(page);
   if (params.has("anki")) {
     addAnkiButtons(page);
   }

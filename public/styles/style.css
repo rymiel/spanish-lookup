@@ -238,6 +238,8 @@ table.quick {
   font-size: 18px;
   color: #faf;
   background-color: #1e1e1e;
+  position: sticky;
+  top: 1rem;
 }
 
 table.quick th {

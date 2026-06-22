@@ -381,12 +381,11 @@ function buildTranslationBlock(navFrame: HTMLElement): HTMLElement | null {
   if (navHeader.className !== "NavHead") return null;
   const navContent = navFrame.lastElementChild;
   if (!(navContent instanceof HTMLElement) || navContent.className !== "NavContent") return null;
-  const trEnglish = navHeader.innerText;
-  if (trEnglish === "Translations to be checked") return null;
+  if (navHeader.innerText === "Translations to be checked") return null;
 
   const trElement = document.createElement("div");
   const trKey = document.createElement("span");
-  trKey.innerText = trEnglish + ": ";
+  trKey.append(...navHeader.childNodes, ": ");
   trElement.appendChild(trKey);
 
   const trEntries = Array.from(navContent.querySelectorAll('li > span[lang="es"]'));
@@ -405,12 +404,11 @@ function buildTranslationBlock(navFrame: HTMLElement): HTMLElement | null {
     });
   }
 
-  runRecursiveFilters(trElement);
   return trElement;
 }
 
 function extractTranslationBlocks(page: HTMLElement) {
-  const translationHeadings = page.querySelectorAll<HTMLElement>("[id^=Translations].mw-headline");
+  const translationHeadings = page.querySelectorAll<HTMLElement>("[data-h=Translations]");
   const translationSections = Array.from(translationHeadings).flatMap((i) => delimitSection(i.parentElement!));
   return translationSections.flatMap((i) => {
     const block = buildTranslationBlock(i);
@@ -428,6 +426,8 @@ function renderEnglishTranslations(page: HTMLElement, query: string, cleanup: ()
     }
     return;
   }
+
+  runRecursiveFilters(page);
 
   const searchHeader = document.createElement("h1");
   searchHeader.innerText = query;

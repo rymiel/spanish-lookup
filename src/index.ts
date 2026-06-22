@@ -1,11 +1,18 @@
+import { addAnkiButtons, requestAnkiPermission } from "./anki.js";
 import { loadStardict, lookup } from "./localdict.js";
+import {
+  delimitSection,
+  keepOnlyLanguageSection,
+  removeWiktionaryChrome,
+  runRecursiveFilters,
+} from "./wiktionary-dom.js";
 
 let form: HTMLFormElement;
 let queryBox: HTMLInputElement;
 let content: HTMLDivElement;
 let quickContent: HTMLDivElement;
 let left: HTMLDivElement;
-let activeQuery: string;
+let activeQuery = "";
 
 let controller = new AbortController();
 
@@ -15,6 +22,22 @@ const headers = new Headers({
 
 const frequencies: Map<string, Record<string, number>> = new Map();
 const VARIANTS = ["-freq", "-count"] as const;
+
+type LoadingState = {
+  quickLoader: HTMLDivElement;
+  loader: HTMLDivElement;
+};
+
+type WiktionaryParseResponse = {
+  error?: {
+    code?: string;
+    info?: string;
+  };
+  parse?: {
+    text: string;
+    wikitext: string;
+  };
+};
 
 function constructURL(query: string): string {
   const encoded = encodeURIComponent(query);
@@ -27,62 +50,43 @@ function constructTemplateURL(template: string, title: string): string {
   return `https://en.wiktionary.org/w/api.php?action=expandtemplates&title=${encodedTitle}&text={{${encodedTempl}|json=1}}&prop=wikitext&formatversion=2&origin=*&format=json`;
 }
 
-function rgb(s: string): number[] {
-  return s
-    .substring(4, s.length - 1)
-    .split(", ")
-    .map((i) => parseInt(i));
-}
-
-function unrgb(n: number[]) {
-  return `rgb(${n.join(", ")})`;
-}
-
-const ANKI_VERSION = 6;
-type AnkiOk<T> = { result: T; error: null };
-type AnkiError = { result: null; error: string };
-type AnkiResponse<T> = AnkiOk<T> | AnkiError;
-async function invoke<T = object>(action: string, params: object = {}): Promise<T> {
-  const i = await fetch("http://127.0.0.1:8765", {
-    method: "POST",
-    body: JSON.stringify({
-      action,
-      params,
-      version: ANKI_VERSION,
-    }),
-  });
-  const json = (await i.json()) as AnkiResponse<T>;
-  if (json.error) {
-    throw json.error;
+function showError(message: string, title?: string) {
+  const errorMessage = document.createElement("div");
+  errorMessage.innerText = message;
+  if (title !== undefined) {
+    errorMessage.title = title;
   }
-  return json.result as T; // why, ts?
+  content.appendChild(errorMessage);
 }
-type AnkiPermissionResponse = { permission: "granted" | "denied" };
 
-function findPronuncation(pronuncationTitle: HTMLElement, page: HTMLElement): string | undefined {
-  const pronuncationSection = pronuncationTitle.parentElement!.nextElementSibling! as HTMLElement;
-  let pronuncationEntries: HTMLElement[] = Array.from(pronuncationSection.querySelectorAll("li")).filter((el) =>
+function isActiveQuery(query: string) {
+  return activeQuery === query;
+}
+
+function findPronunciation(pronunciationTitle: HTMLElement, page: HTMLElement): string | undefined {
+  const pronunciationSection = pronunciationTitle.parentElement!.nextElementSibling! as HTMLElement;
+  let pronunciationEntries: HTMLElement[] = Array.from(pronunciationSection.querySelectorAll("li")).filter((el) =>
     el.innerText.startsWith("IPA"),
   );
   const switcherEntries = Array.from(page.querySelectorAll(".vsSwitcher > .vsHide > ul > li")) as HTMLElement[];
 
-  // Sometimes the pronuncations are in consecutive switchers, instead of directly under the "Pronuncation"
+  // Sometimes the pronunciations are in consecutive switchers, instead of directly under the "Pronunciation"
   // header. We can't use this in every case because sometimes the switchers aren't there at all, so just
   // use whichever one is more accurate.
-  if (switcherEntries.length > pronuncationEntries.length) {
-    pronuncationEntries = switcherEntries;
+  if (switcherEntries.length > pronunciationEntries.length) {
+    pronunciationEntries = switcherEntries;
   }
 
-  // Try to find the most Buenos Aires pronuncation
-  const correctPronuncation =
-    pronuncationEntries.length === 1
-      ? pronuncationEntries[0]
-      : (pronuncationEntries.find((el) => el.innerText.includes("Buenos Aires")) ??
-        pronuncationEntries.find((el) => el.innerText.includes("Latin America")));
+  // Try to find the most Buenos Aires pronunciation.
+  const correctPronunciation =
+    pronunciationEntries.length === 1
+      ? pronunciationEntries[0]
+      : (pronunciationEntries.find((el) => el.innerText.includes("Buenos Aires")) ??
+        pronunciationEntries.find((el) => el.innerText.includes("Latin America")));
 
-  if (correctPronuncation === undefined) {
+  if (correctPronunciation === undefined) {
     console.error(
-      `Couldn't find the correct pronuncation from the choices ${pronuncationEntries
+      `Couldn't find the correct pronunciation from the choices ${pronunciationEntries
         .map((el) => el.innerText)
         .join(", ")}`,
     );
@@ -91,51 +95,8 @@ function findPronuncation(pronuncationTitle: HTMLElement, page: HTMLElement): st
   } else {
     // Extract just the IPA. There's some jank here to account for words which do not vary by region. Those
     // are formatted slightly differently by wiktionary.
-    return correctPronuncation.innerText.split("(", 3)[1].trim().substring(5).trim();
+    return correctPronunciation.innerText.split("(", 3)[1].trim().substring(5).trim();
   }
-}
-
-const recursiveFilters = [
-  function recursiveFilterColors(el: HTMLElement) {
-    const bg = el.style.backgroundColor;
-    if (bg !== "") {
-      const inverted = rgb(bg).map((i) => 255 - i);
-      el.style.backgroundColor = unrgb(inverted);
-    }
-  },
-
-  function recursiveFilterLinks(el: HTMLElement) {
-    if (el instanceof HTMLAnchorElement) {
-      const href = el.href;
-      if (href !== "") {
-        if (href.startsWith(window.location.origin)) {
-          const suffix = href.substring(window.location.origin.length);
-          if (suffix.endsWith("#Spanish") && suffix.startsWith("/wiki/")) {
-            const page = suffix.substring(6, suffix.length - 8);
-            el.classList.add("inlink");
-            el.href = "#" + page;
-          } else {
-            el.href = "https://en.wiktionary.org/" + suffix;
-            el.target = "_blank";
-          }
-        } else {
-          el.target = "_blank";
-        }
-      }
-    }
-  },
-
-  function recursiveFilterHeaders(el: HTMLElement) {
-    if (el instanceof HTMLHeadingElement) {
-      el.dataset.h = el.innerText;
-    }
-  },
-] as const;
-
-function runRecursiveFilters(el: HTMLElement) {
-  recursiveFilters.forEach((fn) => fn(el));
-
-  Array.from(el.children).forEach((i) => runRecursiveFilters(i as HTMLElement));
 }
 
 const vosotrosFilterColumns = [1, 1, 1, 0, 0, 2, 4, 6, 5, 5, 5, 5, 5, 0, 6, 5, 5, 5, 5, 0, 6, 5, 5] as const;
@@ -143,9 +104,11 @@ const vosotrosFilterColumns = [1, 1, 1, 0, 0, 2, 4, 6, 5, 5, 5, 5, 5, 0, 6, 5, 5
 function filterVosotrosTable(table: HTMLTableElement) {
   for (const row of table.rows) {
     const cells = row.cells;
-    const idx = row.rowIndex;
+    const decIndex = vosotrosFilterColumns[row.rowIndex];
+    if (decIndex === undefined || cells[decIndex] === undefined) {
+      continue;
+    }
 
-    const decIndex = vosotrosFilterColumns[idx];
     if (cells[decIndex].colSpan === 1) {
       cells[decIndex].remove();
     } else {
@@ -157,7 +120,7 @@ function filterVosotrosTable(table: HTMLTableElement) {
 const compactableRows = [7, 14, 20];
 function filterCompactTable(table: HTMLTableElement) {
   for (const row of table.rows) {
-    if (compactableRows.indexOf(row.rowIndex) == -1) {
+    if (!compactableRows.includes(row.rowIndex)) {
       continue;
     }
 
@@ -194,42 +157,6 @@ function buildTable(a: readonly string[], b: readonly Node[]) {
   });
 
   return formTable;
-}
-
-function isHeaderName(str: string) {
-  return str === "H1" || str === "H2" || str === "H3" || str === "H4" || str === "H5";
-}
-
-function isHeader(el: HTMLElement): boolean {
-  return (
-    (el.classList.contains("mw-heading") && el.firstElementChild && isHeaderName(el.firstElementChild.nodeName)) ??
-    false
-  );
-}
-
-function equalOrHigherLevel(base: HTMLElement, other: HTMLElement) {
-  if (!isHeader(base) || !isHeader(other)) {
-    return false;
-  }
-
-  const baseLevel = parseInt(base.firstElementChild!.nodeName[1]);
-  const otherLevel = parseInt(other.firstElementChild!.nodeName[1]);
-  return otherLevel <= baseLevel;
-}
-
-function delimitSection(headerContainer: HTMLElement): HTMLElement[] {
-  const elements: HTMLElement[] = [];
-  if (isHeaderName(headerContainer.nodeName)) {
-    headerContainer = headerContainer.parentElement!;
-  } else if (!isHeader(headerContainer)) {
-    throw new Error(`Cannot delimit non-header element ${headerContainer}`);
-  }
-  let next = headerContainer.nextElementSibling as HTMLElement | null;
-  while (next !== null && !equalOrHigherLevel(headerContainer, next)) {
-    elements.push(next);
-    next = next.nextElementSibling as HTMLElement | null;
-  }
-  return elements;
 }
 
 const PRONOUNS = [
@@ -274,113 +201,108 @@ interface EsConjJson {
 
 const esConjRegex = /{{(es-conj[^}]*?)}}/;
 
-function spanishDefinitionLookup(page: HTMLElement, query: string, wikitext: string, cleanup: () => void) {
-  // console.log(wikitext);
-  const templateLookup = esConjRegex.exec(wikitext);
-  console.log(templateLookup);
-  if (templateLookup && templateLookup[1]) {
-    const loader = document.createElement("div");
-    loader.className = "loader";
-    left.appendChild(loader);
-    fetch(constructTemplateURL(templateLookup[1], query), {
-      method: "GET",
-      headers: headers,
-      signal: controller.signal,
-    })
-      .then((r) => r.json())
-      .then((json) => {
-        // console.log(json);
-        const innerJson = JSON.parse(json.expandtemplates.wikitext) as EsConjJson;
-        console.log(innerJson);
-
-        // TODO: include footnotes
-        const forms = FORMS.map((i) => {
-          const div = document.createElement("div");
-          innerJson.forms[i]
-            .map((j) => {
-              const span = document.createElement("span");
-              span.innerText = j.form;
-              if (j.footnotes) {
-                span.title = j.footnotes.join(", ");
-                span.classList.add("footnote");
-              }
-              return span;
-            })
-            .forEach((span, i) => {
-              if (i > 0) div.append(", ");
-              div.appendChild(span);
-            });
-          return div;
-        });
-
-        const formTable = buildTable(PRONOUNS, forms);
-        loader.remove();
-        left.appendChild(formTable);
+function buildConjugationSidebar(innerJson: EsConjJson) {
+  // TODO: include footnotes
+  const forms = FORMS.map((i) => {
+    const div = document.createElement("div");
+    innerJson.forms[i]
+      .map((j) => {
+        const span = document.createElement("span");
+        span.innerText = j.form;
+        if (j.footnotes) {
+          span.title = j.footnotes.join(", ");
+          span.classList.add("footnote");
+        }
+        return span;
+      })
+      .forEach((span, i) => {
+        if (i > 0) div.append(", ");
+        div.appendChild(span);
       });
-  }
+    return div;
+  });
 
-  const spanishHeader = page.querySelector<HTMLElement>("h2#Spanish")?.parentElement;
-  if (!spanishHeader) {
-    if (activeQuery === query) {
-      const errorMessage = document.createElement("div");
-      errorMessage.innerText = "This page has no Spanish entry!";
-      content.appendChild(errorMessage);
-      cleanup();
-    }
+  return buildTable(PRONOUNS, forms);
+}
+
+function loadConjugationSidebar(wikitext: string, query: string, signal: AbortSignal) {
+  const templateLookup = esConjRegex.exec(wikitext);
+  if (!templateLookup?.[1]) {
     return;
   }
 
-  const spanishSection: Element[] = delimitSection(spanishHeader);
-  Array.from(page.children)
-    .filter((i) => !spanishSection.includes(i))
-    .forEach((i) => i.remove());
+  const loader = document.createElement("div");
+  loader.className = "loader";
+  left.appendChild(loader);
+  fetch(constructTemplateURL(templateLookup[1], query), {
+    method: "GET",
+    headers: headers,
+    signal,
+  })
+    .then((r) => r.json())
+    .then((json) => {
+      if (!isActiveQuery(query) || signal.aborted) {
+        return;
+      }
 
-  runRecursiveFilters(page);
+      const innerJson = JSON.parse(json.expandtemplates.wikitext) as EsConjJson;
+      left.appendChild(buildConjugationSidebar(innerJson));
+    })
+    .catch((err) => {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        return;
+      }
+      console.error(err);
+    })
+    .finally(() => loader.remove());
+}
 
-  const searchHeader = document.createElement("h1");
-  searchHeader.innerText = query;
-  page.prepend(searchHeader);
-
-  const pronuncationTitle = page.querySelector<HTMLElement>("h3[data-h=Pronunciation]");
-  if (pronuncationTitle) {
-    const pronuncation = findPronuncation(pronuncationTitle, page);
-
-    if (pronuncation) {
-      // Remove the whole Pronuncation section
-      delimitSection(pronuncationTitle).forEach((i) => i.remove());
-      pronuncationTitle.remove();
-
-      // Put the pronuncation directly in the title
-      searchHeader.innerText = `<${query}> ${pronuncation}`;
-    }
+function addPronunciationToHeader(page: HTMLElement, query: string, searchHeader: HTMLHeadingElement) {
+  const pronunciationTitle = page.querySelector<HTMLElement>("h3[data-h=Pronunciation]");
+  if (!pronunciationTitle) {
+    return;
   }
 
-  const params = new URLSearchParams(window.location.search);
+  const pronunciation = findPronunciation(pronunciationTitle, page);
+  if (!pronunciation) {
+    return;
+  }
+
+  delimitSection(pronunciationTitle).forEach((i) => i.remove());
+  pronunciationTitle.remove();
+  searchHeader.innerText = `<${query}> ${pronunciation}`;
+}
+
+function addFrequencyList(searchHeader: HTMLHeadingElement, query: string, params: URLSearchParams) {
   const freqs = params.get("freq");
-  if (freqs !== null) {
-    const container = document.createElement("div");
-    container.classList.add("freqlist");
-    searchHeader.insertAdjacentElement("afterend", container);
-
-    freqs.split(",").forEach((id, i) => {
-      if (i > 0) container.insertAdjacentElement("beforeend", document.createElement("br"));
-
-      const freq = frequencies.get(`${id}-freq`);
-      const count = frequencies.get(`${id}-count`);
-      const freqValue = freq ? (freq[query] ?? 0).toString() : "?";
-      const countValue = count ? (count[query] ?? 0).toString() : "?";
-      const freqEl = document.createElement("span");
-      freqEl.innerText = `${id}: ${freqValue}`;
-      container.insertAdjacentElement("beforeend", freqEl);
-      const countEl = document.createElement("span");
-      countEl.innerText = `(count): ${countValue}`;
-      container.insertAdjacentElement("beforeend", countEl);
-    });
+  if (freqs === null) {
+    return;
   }
 
+  const container = document.createElement("div");
+  container.classList.add("freqlist");
+  searchHeader.insertAdjacentElement("afterend", container);
+
+  freqs.split(",").forEach((id, i) => {
+    if (i > 0) container.insertAdjacentElement("beforeend", document.createElement("br"));
+
+    const freq = frequencies.get(`${id}-freq`);
+    const count = frequencies.get(`${id}-count`);
+    const freqValue = freq ? (freq[query] ?? 0).toString() : "?";
+    const countValue = count ? (count[query] ?? 0).toString() : "?";
+    const freqEl = document.createElement("span");
+    freqEl.innerText = `${id}: ${freqValue}`;
+    container.insertAdjacentElement("beforeend", freqEl);
+    const countEl = document.createElement("span");
+    countEl.innerText = `(count): ${countValue}`;
+    container.insertAdjacentElement("beforeend", countEl);
+  });
+}
+
+function collapseEtymologies(page: HTMLElement) {
   const etymologyTitles = page.querySelectorAll<HTMLElement>("h3[data-h^=Etymology]");
   etymologyTitles.forEach((etymologyTitle) => {
-    const content = delimitSection(etymologyTitle);
+    const content = delimitSection(etymologyTitle, 4);
 
     const details = document.createElement("details");
     etymologyTitle.insertAdjacentElement("afterend", details);
@@ -391,153 +313,132 @@ function spanishDefinitionLookup(page: HTMLElement, query: string, wikitext: str
     summary.appendChild(etymologyTitle);
     content.forEach((i) => details.appendChild(i));
   });
+}
 
+function trimConjugationTables(page: HTMLElement) {
   const tables = Array.from(page.querySelectorAll(".NavFrame .NavContent")).filter((i) =>
     (i.previousElementSibling as HTMLElement).textContent?.trim().startsWith("Conjugation of"),
   );
-  if (tables.length > 0) {
-    const primaryTable = tables[0].firstElementChild as HTMLTableElement;
+  const primaryTable = tables[0]?.firstElementChild;
+  if (primaryTable instanceof HTMLTableElement) {
     filterVosotrosTable(primaryTable);
     filterCompactTable(primaryTable);
   }
+}
 
-  if (params.has("anki")) {
-    const headwords = page.querySelectorAll<HTMLElement>(".headword");
-    const duplicate = new Promise<boolean>((resolve) => {
-      if (headwords.length > 0) {
-        invoke<number[]>("findNotes", {
-          query: `"deck:Words from textbook" "Expression:${headwords[0].innerText}"`,
-        }).then((i) => {
-          if (i.length === 0) resolve(true);
-        });
-      }
-    });
-    headwords.forEach((i) => {
-      const headwordLine = i.parentElement;
-      const headwordParagraph = headwordLine?.parentElement;
-      let previousHeaderContainer = headwordParagraph?.previousElementSibling;
-      let previousHeader = previousHeaderContainer?.firstElementChild as HTMLElement | null;
-      if (previousHeader?.nodeName !== "H3" && previousHeader?.nodeName !== "H4") previousHeader = null;
-      const gender = headwordLine?.querySelector(".gender");
-      const list = headwordParagraph?.nextElementSibling;
-      if (!headwordLine || !headwordParagraph || !list) return;
-      if (list.nodeName !== "OL") return;
-      const firstEntry = list.firstElementChild as HTMLElement | null;
-      const primaryMeaning = firstEntry?.textContent?.split("\n")[0];
-      if (!primaryMeaning) return;
-
-      const link = document.createElement("input");
-      link.type = "button";
-      link.value = "+";
-      link.addEventListener("click", () => {
-        invoke("guiAddCards", {
-          note: {
-            deckName: "Words from textbook",
-            modelName: "Basic+Spanish",
-            fields: {
-              Expression: i.innerText,
-              Meaning: primaryMeaning,
-              Notes: [previousHeader?.innerText.toLowerCase() ?? undefined, gender?.textContent ?? undefined]
-                .filter((i) => i !== undefined)
-                .join(" "),
-            },
-            tags: ["connect"],
-          },
-        });
-      });
-      duplicate.then(() => headwordLine.insertBefore(link, i));
-    });
+function renderSpanishDefinition(
+  page: HTMLElement,
+  query: string,
+  wikitext: string,
+  params: URLSearchParams,
+  signal: AbortSignal,
+  cleanup: () => void,
+) {
+  if (!keepOnlyLanguageSection(page, "Spanish")) {
+    if (isActiveQuery(query)) {
+      showError("This page has no Spanish entry!");
+      cleanup();
+    }
+    return;
   }
 
-  // Load into page
-  if (activeQuery === query) {
+  loadConjugationSidebar(wikitext, query, signal);
+  runRecursiveFilters(page);
+
+  const searchHeader = document.createElement("h1");
+  searchHeader.innerText = query;
+  page.prepend(searchHeader);
+
+  addPronunciationToHeader(page, query, searchHeader);
+  addFrequencyList(searchHeader, query, params);
+  collapseEtymologies(page);
+  trimConjugationTables(page);
+  if (params.has("anki")) {
+    addAnkiButtons(page);
+  }
+
+  if (isActiveQuery(query)) {
     cleanup();
     content.appendChild(page);
     document.title = `${query} | Spanish`;
   }
 }
 
+function buildTranslationBlock(navFrame: HTMLElement): HTMLElement | null {
+  if (navFrame.className !== "NavFrame") return null;
+  const navHeader = navFrame.firstElementChild as HTMLElement;
+  if (navHeader.className !== "NavHead") return null;
+  const navContent = navFrame.lastElementChild;
+  if (!(navContent instanceof HTMLElement) || navContent.className !== "NavContent") return null;
+  const trEnglish = navHeader.innerText;
+  if (trEnglish === "Translations to be checked") return null;
+
+  const trElement = document.createElement("div");
+  const trKey = document.createElement("span");
+  trKey.innerText = trEnglish + ": ";
+  trElement.appendChild(trKey);
+
+  const trEntries = Array.from(navContent.querySelectorAll('li > span[lang="es"]'));
+  if (trEntries.length === 0) {
+    const trNothing = document.createElement("span");
+    trNothing.innerText = "No translations";
+    trNothing.className = "nothing";
+    trElement.appendChild(trNothing);
+  } else {
+    trEntries.forEach((e, i) => {
+      if (i > 0) {
+        trElement.appendChild(document.createTextNode(", "));
+      }
+      e.classList.add("tr");
+      trElement.appendChild(e);
+    });
+  }
+
+  runRecursiveFilters(trElement);
+  return trElement;
+}
+
+function extractTranslationBlocks(page: HTMLElement) {
+  const translationHeadings = page.querySelectorAll<HTMLElement>("[id^=Translations].mw-headline");
+  const translationSections = Array.from(translationHeadings).flatMap((i) => delimitSection(i.parentElement!));
+  return translationSections.flatMap((i) => {
+    const block = buildTranslationBlock(i);
+    return block === null ? [] : [block];
+  });
+}
+
 // TODO: fix for those random pages which have their translations on a separate page for some reason
-function englishTranslationLookup(page: HTMLElement, query: string, cleanup: () => void) {
+function renderEnglishTranslations(page: HTMLElement, query: string, cleanup: () => void) {
   const rawQuery = query + "?";
-  const englishHeader = page.querySelector<HTMLElement>("h2#English")?.parentElement;
-  if (!englishHeader) {
-    if (activeQuery === rawQuery) {
-      const errorMessage = document.createElement("div");
-      errorMessage.innerText = "This page has no English entry!";
-      content.appendChild(errorMessage);
+  if (!keepOnlyLanguageSection(page, "English")) {
+    if (isActiveQuery(rawQuery)) {
+      showError("This page has no English entry!");
       cleanup();
     }
     return;
   }
-
-  const englishSection: Element[] = delimitSection(englishHeader);
-  Array.from(page.children)
-    .filter((i) => !englishSection.includes(i))
-    .forEach((i) => i.remove());
 
   const searchHeader = document.createElement("h1");
   searchHeader.innerText = query;
   page.prepend(searchHeader);
 
-  const translationHeadings = page.querySelectorAll<HTMLElement>("[id^=Translations].mw-headline");
-  const translationSections = Array.from(translationHeadings).flatMap((i) => delimitSection(i.parentElement!));
-
-  const trList: HTMLElement[] = [];
-  translationSections.forEach((i) => {
-    if (i.className !== "NavFrame") return;
-    const navHeader = i.firstElementChild! as HTMLElement;
-    if (navHeader.className !== "NavHead") return;
-    const navContent = i.lastElementChild!;
-    if (navContent.className !== "NavContent") return;
-    const trEnglish = navHeader.innerText;
-    if (trEnglish === "Translations to be checked") return;
-
-    const trElement = document.createElement("div");
-    const trKey = document.createElement("span");
-    trKey.innerText = trEnglish + ": ";
-    trElement.appendChild(trKey);
-
-    const trEntries = Array.from(navContent.querySelectorAll('li > span[lang="es"]'));
-    if (trEntries.length === 0) {
-      const trNothing = document.createElement("span");
-      trNothing.innerText = "No translations";
-      trNothing.className = "nothing";
-      trElement.appendChild(trNothing);
-    } else {
-      trEntries.forEach((e, i) => {
-        if (i > 0) {
-          trElement.appendChild(document.createTextNode(", "));
-        }
-        e.classList.add("tr");
-        trElement.appendChild(e);
-      });
-    }
-
-    runRecursiveFilters(trElement);
-    trList.push(trElement);
-  });
-
-  if (trList.length === 0) {
-    if (activeQuery === rawQuery) {
-      const errorMessage = document.createElement("div");
-      errorMessage.innerText = "This page has no translations!";
-      content.appendChild(errorMessage);
+  const translations = extractTranslationBlocks(page);
+  if (translations.length === 0) {
+    if (isActiveQuery(rawQuery)) {
+      showError("This page has no translations!");
       cleanup();
     }
     return;
   }
 
-  // Load into page
-  if (activeQuery === rawQuery) {
+  if (isActiveQuery(rawQuery)) {
     cleanup();
-    trList.forEach((el) => content.appendChild(el));
+    translations.forEach((el) => content.appendChild(el));
     document.title = `${query}? | Spanish`;
   }
 }
 
-function startLoading(): [HTMLDivElement, HTMLDivElement] {
-  // Clear previous results and create a spinner
+function startLoading(): LoadingState {
   content.innerHTML = "";
   quickContent.innerHTML = "";
   left.innerHTML = "";
@@ -550,39 +451,31 @@ function startLoading(): [HTMLDivElement, HTMLDivElement] {
   loader.className = "loader";
   content.appendChild(loader);
 
-  return [quickLoader, loader];
+  return { quickLoader, loader };
 }
 
-function makeQuery(query: string) {
-  if (query == activeQuery) {
+function finishLoading(loaders: LoadingState) {
+  loaders.loader.remove();
+  loaders.quickLoader.remove();
+  queryBox.disabled = false;
+  queryBox.select();
+  document.title = "Spanish";
+}
+
+function loadQuickResults(query: string, rawQuery: string, quickLoader: HTMLDivElement, params: URLSearchParams) {
+  if (!params.has("star")) {
+    quickLoader.remove();
     return;
   }
 
-  activeQuery = query;
-  queryBox.value = query;
-  window.location.hash = query;
-  queryBox.disabled = true;
-  const [quickLoader, loader] = startLoading();
+  lookup(query)
+    .then((results) => {
+      if (!isActiveQuery(rawQuery)) {
+        return;
+      }
 
-  const cleanup = () => {
-    loader.remove();
-    quickLoader.remove();
-    queryBox.disabled = false;
-    queryBox.select();
-    document.title = "Spanish";
-  };
-
-  const originalQuery = query;
-  const isTranslationLookup = query.endsWith("?");
-  if (isTranslationLookup) {
-    query = query.substring(0, query.length - 1);
-  }
-
-  const params = new URLSearchParams(window.location.search);
-  if (params.has("star")) {
-    lookup(query).then((i) => {
       quickLoader.remove();
-      i.forEach((m) => {
+      results.forEach((m) => {
         const h = document.createElement("h3");
         h.innerText = m.word ?? "?";
         quickContent.appendChild(h);
@@ -590,60 +483,110 @@ function makeQuery(query: string) {
           .parseFromString(m.data, "text/html")
           .body.childNodes.forEach((n) => quickContent.appendChild(n));
       });
+    })
+    .catch((err) => {
+      if (isActiveQuery(rawQuery)) {
+        quickLoader.remove();
+        console.error(err);
+      }
     });
+}
+
+function parseWiktionaryPage(html: string) {
+  const page = new DOMParser().parseFromString(html, "text/html").body.children[0] as HTMLElement;
+  removeWiktionaryChrome(page);
+  return page;
+}
+
+function showApiError(json: WiktionaryParseResponse, rawQuery: string, cleanup: () => void) {
+  console.error(json.error);
+  if (json.error?.info) {
+    showError(json.error.info, json.error.code);
   } else {
-    quickLoader.remove();
+    showError("An unknown error ocurred", json.toString());
+  }
+  if (isActiveQuery(rawQuery)) {
+    cleanup();
+  }
+}
+
+function makeQuery(rawQuery: string) {
+  if (rawQuery == activeQuery) {
+    return;
   }
 
-  controller.abort(); // Abort all existing queries
-  controller = new AbortController(); // Make a new controller for the new query
+  activeQuery = rawQuery;
+  queryBox.value = rawQuery;
+  window.location.hash = rawQuery;
+  queryBox.disabled = true;
+  const loaders = startLoading();
+  const cleanup = () => finishLoading(loaders);
+  const params = new URLSearchParams(window.location.search);
+
+  const isTranslationLookup = rawQuery.endsWith("?");
+  const query = isTranslationLookup ? rawQuery.substring(0, rawQuery.length - 1) : rawQuery;
+
+  loadQuickResults(query, rawQuery, loaders.quickLoader, params);
+
+  controller.abort();
+  controller = new AbortController();
+  const signal = controller.signal;
+
   fetch(constructURL(query), {
     method: "GET",
-    signal: controller.signal,
+    signal,
     headers: headers,
   })
-    .then((r) => r.json())
+    .then((r) => r.json() as Promise<WiktionaryParseResponse>)
     .then((json) => {
-      // console.log(json);
-      if (json.error) {
-        console.error(json.error);
-        const errorMessage = document.createElement("div");
-        if (json.error.info) {
-          errorMessage.title = json.error.code;
-          errorMessage.innerText = json.error.info;
-        } else {
-          errorMessage.title = json.toString();
-          errorMessage.innerText = "An unknown error ocurred";
-        }
-        if (activeQuery === originalQuery) {
-          content.appendChild(errorMessage);
-          cleanup();
-        }
+      if (!isActiveQuery(rawQuery)) {
         return;
       }
-      const html = json.parse.text;
-      const wikitext = json.parse.wikitext;
 
-      let page = new DOMParser().parseFromString(html, "text/html").body.children[0] as HTMLElement;
+      if (json.error) {
+        showApiError(json, rawQuery, cleanup);
+        return;
+      }
+      if (!json.parse) {
+        showError("An unknown error ocurred", json.toString());
+        cleanup();
+        return;
+      }
 
-      // Delete all [edit] links, this is just for viewing, not editing
-      page.querySelectorAll(".mw-editsection").forEach((i) => i.remove());
-      // Delete all references [1], I don't need them here
-      page.querySelectorAll(".reference").forEach((i) => i.remove());
-      page.querySelectorAll(".external").forEach((i) => i.remove());
-
+      const page = parseWiktionaryPage(json.parse.text);
       if (isTranslationLookup) {
-        englishTranslationLookup(page, query, cleanup);
+        renderEnglishTranslations(page, query, cleanup);
       } else {
-        spanishDefinitionLookup(page, query, wikitext, cleanup);
+        renderSpanishDefinition(page, query, json.parse.wikitext, params, signal, cleanup);
       }
     })
     .catch((err) => {
-      if (activeQuery === originalQuery) {
+      if (isActiveQuery(rawQuery)) {
         cleanup();
         console.error(err);
       }
     });
+}
+
+function initializeFrequencyLists(params: URLSearchParams) {
+  const freqs = params.get("freq");
+  if (freqs === null) {
+    return;
+  }
+
+  (async () => {
+    for (const key of freqs.split(",")) {
+      for (const suffix of VARIANTS) {
+        try {
+          const res = await fetch(`/freq/${key}${suffix}.json`);
+          const json = await res.json();
+          frequencies.set(`${key}${suffix}`, json);
+        } catch {
+          frequencies.set(`${key}${suffix}`, {});
+        }
+      }
+    }
+  })();
 }
 
 addEventListener("load", () => {
@@ -670,25 +613,10 @@ addEventListener("load", () => {
   }
 
   if (params.has("anki")) {
-    invoke<AnkiPermissionResponse>("requestPermission").then((i) => console.log(i.permission));
+    requestAnkiPermission();
   }
 
-  const freqs = params.get("freq");
-  if (freqs !== null) {
-    (async () => {
-      for (const key of freqs.split(",")) {
-        for (const suffix of VARIANTS) {
-          try {
-            const res = await fetch(`/freq/${key}${suffix}.json`);
-            const json = await res.json();
-            frequencies.set(`${key}${suffix}`, json);
-          } catch {
-            frequencies.set(`${key}${suffix}`, {});
-          }
-        }
-      }
-    })();
-  }
+  initializeFrequencyLists(params);
 
   if (params.has("star")) {
     loadStardict().then(() => console.log("stardict loaded"));

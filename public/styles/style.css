@@ -303,6 +303,11 @@ input[type="submit"] {
   color: #fff;
 }
 
+#form {
+  position: sticky;
+  top: 12px;
+}
+
 input#query {
   height: 3rem;
   padding: 0.9rem 0.85rem;

@@ -22,7 +22,7 @@ async function invoke<T = object>(action: string, params: object = {}): Promise<
 }
 
 export function requestAnkiPermission() {
-  invoke<AnkiPermissionResponse>("requestPermission").then((i) => console.log(i.permission));
+  invoke<AnkiPermissionResponse>("requestPermission").then((i) => console.log(`Anki permission ${i.permission}`));
 }
 
 async function canAddHeadword(headwords: NodeListOf<HTMLElement>): Promise<boolean> {

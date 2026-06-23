@@ -515,7 +515,15 @@ function parseWiktionaryPage(html: string) {
   const dom = new DOMParser().parseFromString(html, "text/html");
   const version = dom.head.querySelector("meta[property='mw:htmlVersion']")?.getAttribute("content");
   if (version !== "2.8.0") console.warn(`Unknown HTML version '${version}', expected '2.8.0'`);
-  return dom.body;
+  // Avoid a second <body> element on the page
+  const newBody = dom.createElement("div");
+  for (const attrib of dom.body.getAttributeNames()) {
+    newBody.setAttribute(attrib, dom.body.getAttribute(attrib)!);
+  }
+  for (const child of dom.body.childNodes) {
+    newBody.appendChild(child);
+  }
+  return newBody;
 }
 
 function showMWError(json: MediaWikiGenericError, rawQuery: string, cleanup: () => void) {

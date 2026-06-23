@@ -1,11 +1,6 @@
 import { addAnkiButtons, requestAnkiPermission } from "./anki.js";
 import { loadStardict, lookup } from "./localdict.js";
-import {
-  delimitSection,
-  keepOnlyLanguageSection,
-  removeWiktionaryChrome,
-  runRecursiveFilters,
-} from "./wiktionary-dom.js";
+import { keepOnlyLanguageSection, runRecursiveFilters } from "./wiktionary-dom.js";
 
 let form: HTMLFormElement;
 let queryBox: HTMLInputElement;
@@ -28,20 +23,15 @@ type LoadingState = {
   loader: HTMLDivElement;
 };
 
-type WiktionaryParseResponse = {
-  error?: {
-    code?: string;
-    info?: string;
-  };
-  parse?: {
-    text: string;
-    wikitext: string;
-  };
+type MediaWikiGenericError = {
+  httpCode: number;
+  httpMessage?: string;
+  messageTranslations?: Record<string, string>;
 };
 
-function constructURL(query: string): string {
-  const encoded = encodeURIComponent(query);
-  return `https://en.wiktionary.org/w/api.php?action=parse&page=${encoded}&prop=text|wikitext&formatversion=2&origin=*&format=json`;
+function constructParsoidPageURL(query: string): string {
+  const encoded = encodeURIComponent(query).replaceAll(" ", "_");
+  return `https://en.wiktionary.org/w/rest.php/v1/page/${encoded}/html?redirect=true&stash=false&flavor=edit`;
 }
 
 function constructTemplateURL(template: string, title: string): string {
@@ -63,8 +53,7 @@ function isActiveQuery(query: string) {
   return activeQuery === query;
 }
 
-function findPronunciation(pronunciationTitle: HTMLElement, page: HTMLElement): string | undefined {
-  const pronunciationSection = pronunciationTitle.parentElement!.nextElementSibling! as HTMLElement;
+function findPronunciation(pronunciationSection: HTMLElement, page: HTMLElement): string | undefined {
   let pronunciationEntries: HTMLElement[] = Array.from(pronunciationSection.querySelectorAll("li")).filter((el) =>
     el.innerText.startsWith("IPA"),
   );
@@ -199,10 +188,7 @@ interface EsConjJson {
 // TODO: nicer layout of pages with multiple definitions (i.e. jump to definition)
 // this includes pages with multiple "etymologies", for example `colmo`
 
-const esConjRegex = /{{(es-conj[^}]*?)}}/;
-
 function buildConjugationSidebar(innerJson: EsConjJson) {
-  // TODO: include footnotes
   const forms = FORMS.map((i) => {
     const div = document.createElement("div");
     innerJson.forms[i]
@@ -225,16 +211,42 @@ function buildConjugationSidebar(innerJson: EsConjJson) {
   return buildTable(PRONOUNS, forms);
 }
 
-function loadConjugationSidebar(wikitext: string, query: string, signal: AbortSignal) {
-  const templateLookup = esConjRegex.exec(wikitext);
-  if (!templateLookup?.[1]) {
-    return;
+type ParsoidTemplate = {
+  target: { wt: string; href: string };
+  params: Record<string, { wt: string }>;
+};
+type ParsoidTransclusionPart = { template: ParsoidTemplate } | string | {};
+type ParsoidTransclusionData = { parts: ParsoidTransclusionPart[] };
+
+function loadConjugationSidebar(page: HTMLElement, query: string, signal: AbortSignal) {
+  const template = [...page.querySelectorAll<HTMLElement>("[typeof='mw:Transclusion']")]
+    .map((e) => e.dataset.mw)
+    .filter((mw) => mw !== undefined)
+    .map((mw) => JSON.parse(mw) as ParsoidTransclusionData)
+    .flatMap((d) => d.parts)
+    .filter((p) => typeof p === "object" && "template" in p)
+    .find((t) => t.template.target.href === "./Template:es-conj")?.template;
+
+  if (template === undefined) return;
+
+  // Reconstruct template wikitext from parameters
+  let wikitext = "es-conj";
+  for (let i = 1; ; i++) {
+    if (i.toString() in template.params) {
+      wikitext += `|${template.params[i.toString()].wt}`;
+      delete template.params[i.toString()];
+    } else {
+      break;
+    }
+  }
+  for (const k in template.params) {
+    wikitext += `|${k}=${template.params[k].wt}`;
   }
 
   const loader = document.createElement("div");
   loader.className = "loader";
   left.appendChild(loader);
-  fetch(constructTemplateURL(templateLookup[1], query), {
+  fetch(constructTemplateURL(wikitext, query), {
     method: "GET",
     headers: headers,
     signal,
@@ -258,18 +270,13 @@ function loadConjugationSidebar(wikitext: string, query: string, signal: AbortSi
 }
 
 function addPronunciationToHeader(page: HTMLElement, query: string, searchHeader: HTMLHeadingElement) {
-  const pronunciationTitle = page.querySelector<HTMLElement>("h3[data-h=Pronunciation]");
-  if (!pronunciationTitle) {
-    return;
-  }
+  const pronuncationSection = page.querySelector<HTMLElement>("h3[data-h=Pronunciation]")?.parentElement;
+  if (!pronuncationSection) return;
 
-  const pronunciation = findPronunciation(pronunciationTitle, page);
-  if (!pronunciation) {
-    return;
-  }
+  const pronunciation = findPronunciation(pronuncationSection, page);
+  if (!pronunciation) return;
 
-  delimitSection(pronunciationTitle).forEach((i) => i.remove());
-  pronunciationTitle.remove();
+  pronuncationSection.remove();
   searchHeader.innerText = `<${query}> ${pronunciation}`;
 }
 
@@ -300,18 +307,19 @@ function addFrequencyList(searchHeader: HTMLHeadingElement, query: string, param
 }
 
 function collapseEtymologies(page: HTMLElement) {
-  const etymologyTitles = page.querySelectorAll<HTMLElement>("h3[data-h^=Etymology]");
-  etymologyTitles.forEach((etymologyTitle) => {
-    const content = delimitSection(etymologyTitle, 4);
+  // TODO: don't include other headers
+  page.querySelectorAll<HTMLElement>("h3[data-h^=Etymology]").forEach((title) => {
+    const section = title.parentElement;
+    if (!section) return;
 
     const details = document.createElement("details");
-    etymologyTitle.insertAdjacentElement("afterend", details);
+    section.insertAdjacentElement("afterend", details);
 
     const summary = document.createElement("summary");
     details.insertAdjacentElement("afterbegin", summary);
 
-    summary.appendChild(etymologyTitle);
-    content.forEach((i) => details.appendChild(i));
+    details.appendChild(section);
+    summary.appendChild(title);
   });
 }
 
@@ -327,19 +335,14 @@ function trimConjugationTables(page: HTMLElement) {
 }
 
 function removeReferences(page: HTMLElement) {
-  const referenceTitles = ["References", "Further reading"].flatMap((i) => [
-    ...page.querySelectorAll<HTMLElement>(`[data-h='${i}']`),
-  ]);
-  referenceTitles.forEach((referenceTitle) => {
-    delimitSection(referenceTitle).forEach((i) => i.remove());
-    referenceTitle.remove();
-  });
+  ["References", "Further reading"]
+    .flatMap((i) => [...page.querySelectorAll<HTMLElement>(`[data-h='${i}']`)])
+    .forEach((referenceTitle) => referenceTitle.parentElement?.remove());
 }
 
 function renderSpanishDefinition(
   page: HTMLElement,
   query: string,
-  wikitext: string,
   params: URLSearchParams,
   signal: AbortSignal,
   cleanup: () => void,
@@ -352,7 +355,7 @@ function renderSpanishDefinition(
     return;
   }
 
-  loadConjugationSidebar(wikitext, query, signal);
+  loadConjugationSidebar(page, query, signal);
   runRecursiveFilters(page);
 
   const searchHeader = document.createElement("h1");
@@ -382,7 +385,7 @@ function buildTranslationBlock(navFrame: HTMLElement): HTMLElement | null {
   if (navFrame.classList.contains("pseudo")) {
     const trElement = document.createElement("div");
     trElement.classList.add("pseudo");
-    trElement.append(...navHeader.childNodes)
+    trElement.append(...navHeader.childNodes);
     return trElement;
   }
   const navContent = navFrame.lastElementChild;
@@ -414,12 +417,11 @@ function buildTranslationBlock(navFrame: HTMLElement): HTMLElement | null {
 }
 
 function extractTranslationBlocks(page: HTMLElement) {
-  const translationHeadings = page.querySelectorAll<HTMLElement>("[data-h=Translations]");
-  const translationSections = Array.from(translationHeadings).flatMap((i) => delimitSection(i.parentElement!));
-  return translationSections.flatMap((i) => {
-    const block = buildTranslationBlock(i);
-    return block === null ? [] : [block];
-  });
+  return [...page.querySelectorAll<HTMLElement>("[data-h=Translations]")]
+    .flatMap((h) => [...h.parentElement!.children])
+    .filter((f) => f.classList.contains("NavFrame"))
+    .map((f) => buildTranslationBlock(f as HTMLElement))
+    .filter((b) => b !== null);
 }
 
 // TODO: fix for those random pages which have their translations on a separate page for some reason
@@ -510,24 +512,23 @@ function loadQuickResults(query: string, rawQuery: string, quickLoader: HTMLDivE
 }
 
 function parseWiktionaryPage(html: string) {
-  const page = new DOMParser().parseFromString(html, "text/html").body.children[0] as HTMLElement;
-  removeWiktionaryChrome(page);
-  return page;
+  const dom = new DOMParser().parseFromString(html, "text/html");
+  const version = dom.head.querySelector("meta[property='mw:htmlVersion']")?.getAttribute("content");
+  if (version !== "2.8.0") console.warn(`Unknown HTML version '${version}', expected '2.8.0'`);
+  return dom.body;
 }
 
-function showApiError(json: WiktionaryParseResponse, rawQuery: string, cleanup: () => void) {
-  console.error(json.error);
-  if (json.error?.info) {
-    showError(json.error.info, json.error.code);
-  } else {
-    showError("An unknown error ocurred", json.toString());
-  }
+function showMWError(json: MediaWikiGenericError, rawQuery: string, cleanup: () => void) {
+  const title = `${json.httpCode} ${json.httpMessage}`;
+  const message = json.messageTranslations?.["en"];
+  console.error(title, message);
+  showError(message ?? "An unknown error ocurred", title);
   if (isActiveQuery(rawQuery)) {
     cleanup();
   }
 }
 
-function makeQuery(rawQuery: string) {
+async function makeQuery(rawQuery: string) {
   if (rawQuery == activeQuery) {
     return;
   }
@@ -553,40 +554,33 @@ function makeQuery(rawQuery: string) {
   controller = new AbortController();
   const signal = controller.signal;
 
-  fetch(constructURL(query), {
-    method: "GET",
-    signal,
-    headers: headers,
-  })
-    .then((r) => r.json() as Promise<WiktionaryParseResponse>)
-    .then((json) => {
-      if (!isActiveQuery(rawQuery)) {
-        return;
-      }
+  try {
+    const r = await fetch(constructParsoidPageURL(query), {
+      method: "GET",
+      signal,
+      headers: headers,
+    });
+    if (r.ok) {
+      const html = await r.text();
+      if (!isActiveQuery(rawQuery)) return;
 
-      if (json.error) {
-        showApiError(json, rawQuery, cleanup);
-        return;
-      }
-      if (!json.parse) {
-        showError("An unknown error ocurred", json.toString());
-        cleanup();
-        return;
-      }
-
-      const page = parseWiktionaryPage(json.parse.text);
+      const page = parseWiktionaryPage(html);
       if (isTranslationLookup) {
         renderEnglishTranslations(page, query, cleanup);
       } else {
-        renderSpanishDefinition(page, query, json.parse.wikitext, params, signal, cleanup);
+        renderSpanishDefinition(page, query, params, signal, cleanup);
       }
-    })
-    .catch((err) => {
-      if (isActiveQuery(rawQuery)) {
-        cleanup();
-        console.error(err);
-      }
-    });
+    } else {
+      const json = (await r.json()) as MediaWikiGenericError;
+      if (!isActiveQuery(rawQuery)) return;
+      showMWError(json, rawQuery, cleanup);
+    }
+  } catch (err) {
+    if (isActiveQuery(rawQuery)) {
+      cleanup();
+      console.error(err);
+    }
+  }
 }
 
 function initializeFrequencyLists(params: URLSearchParams) {

@@ -16,6 +16,7 @@
     "resolveJsonModule": true,
     "allowJs": true,
     "checkJs": true,
-    "outDir": "public/scripts/"
+    "outDir": "public/scripts/",
+    "rootDir": "./src"
   }
 }

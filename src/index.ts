@@ -174,7 +174,7 @@ const FORMS = [
   "pret_3s",
   "pret_1p",
   "pret_3p",
-  "pres_sub_1s",
+  "pres_sub_3s",
 ] as const;
 type EsConjForm = (typeof FORMS)[number];
 interface EsConjEntry {
@@ -192,7 +192,7 @@ function buildConjugationSidebar(innerJson: EsConjJson) {
   const forms = FORMS.map((i) => {
     const div = document.createElement("div");
     innerJson.forms[i]
-      .map((j) => {
+      ?.map((j) => {
         const span = document.createElement("span");
         span.innerText = j.form;
         if (j.footnotes) {
@@ -201,7 +201,7 @@ function buildConjugationSidebar(innerJson: EsConjJson) {
         }
         return span;
       })
-      .forEach((span, i) => {
+      ?.forEach((span, i) => {
         if (i > 0) div.append(", ");
         div.appendChild(span);
       });

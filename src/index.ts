@@ -231,14 +231,6 @@ function loadConjugationSidebar(page: HTMLElement, query: string, signal: AbortS
 
   // Reconstruct template wikitext from parameters
   let wikitext = "es-conj";
-  for (let i = 1; ; i++) {
-    if (i.toString() in template.params) {
-      wikitext += `|${template.params[i.toString()].wt}`;
-      delete template.params[i.toString()];
-    } else {
-      break;
-    }
-  }
   for (const k in template.params) {
     wikitext += `|${k}=${template.params[k].wt}`;
   }

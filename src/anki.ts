@@ -67,9 +67,9 @@ export function addAnkiButtons(page: HTMLElement) {
   const shouldAddButtons = canAddHeadword(headwords);
 
   headwords.forEach((headword) => {
-    const headwordLine = headword.parentElement;
-    const headwordParagraph = headwordLine?.parentElement;
-    const previousHeaderContainer = headwordParagraph?.previousElementSibling;
+    const headwordLine = headword.parentElement!;
+    const headwordParagraph = headwordLine.parentElement!;
+    const previousHeaderContainer = headwordParagraph.previousElementSibling;
     let previousHeader = previousHeaderContainer?.firstElementChild as HTMLElement | null;
     if (previousHeader?.nodeName !== "H3" && previousHeader?.nodeName !== "H4") previousHeader = null;
     const gender = headwordLine?.querySelector(".gender");

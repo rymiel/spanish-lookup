@@ -55,12 +55,10 @@ export function runRecursiveFilters(el: HTMLElement) {
 
 export function keepOnlyLanguageSection(page: HTMLElement, languageId: "English" | "Spanish"): boolean {
   const languageHeader = page.querySelector<HTMLElement>(`h2#${languageId}`);
-  const languageSection = languageHeader?.parentElement;
-  if (!languageSection || !languageHeader) {
-    return false;
-  }
+  if (!languageHeader) return false;
+  const languageSection = languageHeader.parentElement;
 
-  Array.from(page.children as HTMLCollectionOf<HTMLElement>)
+  Array.from(page.children)
     .filter((i) => i != languageSection)
     .forEach((i) => i.remove());
   languageHeader.remove();

@@ -270,9 +270,7 @@ function loadConjugationSidebar(page: HTMLElement, query: string, signal: AbortS
 }
 
 function addPronunciationToHeader(page: HTMLElement, query: string, searchHeader: HTMLHeadingElement) {
-  const pronuncationSection = page.querySelector<HTMLElement>("h3[data-h=Pronunciation]")?.parentElement;
-  if (!pronuncationSection) return;
-
+  const pronuncationSection = page.querySelector<HTMLElement>("h3[data-h=Pronunciation]")?.parentElement!;
   const pronunciation = findPronunciation(pronuncationSection, page);
   if (!pronunciation) return;
 
@@ -309,8 +307,7 @@ function addFrequencyList(searchHeader: HTMLHeadingElement, query: string, param
 function collapseEtymologies(page: HTMLElement) {
   // TODO: don't include other headers
   page.querySelectorAll<HTMLElement>("h3[data-h^=Etymology]").forEach((title) => {
-    const section = title.parentElement;
-    if (!section) return;
+    const section = title.parentElement!;
 
     const details = document.createElement("details");
     section.insertAdjacentElement("afterend", details);
@@ -337,7 +334,7 @@ function trimConjugationTables(page: HTMLElement) {
 function removeReferences(page: HTMLElement) {
   ["References", "Further reading"]
     .flatMap((i) => [...page.querySelectorAll<HTMLElement>(`[data-h='${i}']`)])
-    .forEach((referenceTitle) => referenceTitle.parentElement?.remove());
+    .forEach((referenceTitle) => referenceTitle.parentElement!.remove());
 }
 
 function renderSpanishDefinition(

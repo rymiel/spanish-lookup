@@ -315,6 +315,12 @@ function collapseEtymologies(page: HTMLElement) {
     const summary = document.createElement("summary");
     details.insertAdjacentElement("afterbegin", summary);
 
+    for (const child of [...section.children]) {
+      if (child.nodeName === "SECTION") {
+        details.insertAdjacentElement("afterend", child);
+      }
+    }
+
     details.appendChild(section);
     summary.appendChild(title);
   });
@@ -517,9 +523,7 @@ function parseWiktionaryPage(html: string) {
   for (const attrib of dom.body.getAttributeNames()) {
     newBody.setAttribute(attrib, dom.body.getAttribute(attrib)!);
   }
-  for (const child of dom.body.childNodes) {
-    newBody.appendChild(child);
-  }
+  newBody.append(...dom.body.childNodes);
   return newBody;
 }
 

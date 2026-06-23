@@ -56,7 +56,17 @@ export function runRecursiveFilters(el: HTMLElement) {
 export function keepOnlyLanguageSection(page: HTMLElement, languageId: "English" | "Spanish"): boolean {
   const languageHeader = page.querySelector<HTMLElement>(`h2#${languageId}`);
   if (!languageHeader) return false;
-  const languageSection = languageHeader.parentElement;
+  const languageSection = languageHeader.parentElement!;
+
+  languageSection.querySelectorAll<HTMLLinkElement>("link[rel='mw-deduplicated-inline-style']").forEach(deduped => {
+    let ref = deduped.href;
+    if (!ref.startsWith("mw-data:")) return;
+    ref = ref.substring("mw-data:".length);
+    const source = page.querySelector<HTMLStyleElement>(`style[data-mw-deduplicate='${ref}']`);
+    if (!source) return;
+    const duplicate = source.cloneNode(true) as HTMLElement;
+    deduped.insertAdjacentElement("afterend", duplicate);
+  });
 
   Array.from(page.children)
     .filter((i) => i != languageSection)

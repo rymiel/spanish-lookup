@@ -53,18 +53,10 @@ function isActiveQuery(query: string) {
   return activeQuery === query;
 }
 
-function findPronunciation(pronunciationSection: HTMLElement, page: HTMLElement): string | undefined {
+function findPronunciation(pronunciationSection: HTMLElement): string | undefined {
   let pronunciationEntries: HTMLElement[] = Array.from(pronunciationSection.querySelectorAll("li")).filter((el) =>
     el.innerText.startsWith("IPA"),
   );
-  const switcherEntries = Array.from(page.querySelectorAll<HTMLLIElement>(".vsSwitcher > .vsHide > ul > li"));
-
-  // Sometimes the pronunciations are in consecutive switchers, instead of directly under the "Pronunciation"
-  // header. We can't use this in every case because sometimes the switchers aren't there at all, so just
-  // use whichever one is more accurate.
-  if (switcherEntries.length > pronunciationEntries.length) {
-    pronunciationEntries = switcherEntries;
-  }
 
   // Try to find the most Buenos Aires pronunciation.
   const correctPronunciation =
@@ -82,9 +74,11 @@ function findPronunciation(pronunciationSection: HTMLElement, page: HTMLElement)
 
     return undefined;
   } else {
-    // Extract just the IPA. There's some jank here to account for words which do not vary by region. Those
-    // are formatted slightly differently by wiktionary.
-    return correctPronunciation.innerText.split("(", 3)[1].trim().substring(5).trim();
+    const ipa = correctPronunciation.querySelectorAll<HTMLElement>(".IPA");
+    // /1/ [2]
+    if (ipa.length !== 2) return;
+
+    return `${ipa[0].innerText} ${ipa[1].innerText}`;
   }
 }
 
@@ -263,8 +257,9 @@ function loadConjugationSidebar(page: HTMLElement, query: string, signal: AbortS
 }
 
 function addPronunciationToHeader(page: HTMLElement, query: string, searchHeader: HTMLHeadingElement) {
-  const pronuncationSection = page.querySelector<HTMLElement>("h3[data-h=Pronunciation]")?.parentElement!;
-  const pronunciation = findPronunciation(pronuncationSection, page);
+  const pronuncationSection = page.querySelector<HTMLElement>("h3[data-h=Pronunciation]")?.parentElement;
+  if (!pronuncationSection) return;
+  const pronunciation = findPronunciation(pronuncationSection);
   if (!pronunciation) return;
 
   pronuncationSection.remove();

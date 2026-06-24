@@ -57,7 +57,7 @@ function findPronunciation(pronunciationSection: HTMLElement, page: HTMLElement)
   let pronunciationEntries: HTMLElement[] = Array.from(pronunciationSection.querySelectorAll("li")).filter((el) =>
     el.innerText.startsWith("IPA"),
   );
-  const switcherEntries = Array.from(page.querySelectorAll(".vsSwitcher > .vsHide > ul > li")) as HTMLElement[];
+  const switcherEntries = Array.from(page.querySelectorAll<HTMLLIElement>(".vsSwitcher > .vsHide > ul > li"));
 
   // Sometimes the pronunciations are in consecutive switchers, instead of directly under the "Pronunciation"
   // header. We can't use this in every case because sometimes the switchers aren't there at all, so just
@@ -191,8 +191,9 @@ interface EsConjJson {
 function buildConjugationSidebar(innerJson: EsConjJson) {
   const forms = FORMS.map((i) => {
     const div = document.createElement("div");
-    innerJson.forms[i]
-      ?.map((j) => {
+    const terms = innerJson.forms[i] ?? [{form: "\u2E3B"}];
+    terms
+      .map((j) => {
         const span = document.createElement("span");
         span.innerText = j.form;
         if (j.footnotes) {
@@ -201,7 +202,7 @@ function buildConjugationSidebar(innerJson: EsConjJson) {
         }
         return span;
       })
-      ?.forEach((span, i) => {
+      .forEach((span, i) => {
         if (i > 0) div.append(", ");
         div.appendChild(span);
       });

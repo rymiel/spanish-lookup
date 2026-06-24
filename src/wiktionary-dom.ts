@@ -64,6 +64,7 @@ export function keepOnlyLanguageSection(page: HTMLElement, languageId: "English"
     ref = ref.substring("mw-data:".length);
     const source = page.querySelector<HTMLStyleElement>(`style[data-mw-deduplicate='${ref}']`);
     if (!source) return;
+    // https://github.com/microsoft/TypeScript/issues/283
     const duplicate = source.cloneNode(true) as HTMLElement;
     deduped.insertAdjacentElement("afterend", duplicate);
   });

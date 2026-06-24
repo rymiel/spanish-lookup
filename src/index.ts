@@ -182,7 +182,7 @@ interface EsConjEntry {
   footnotes?: string[];
 }
 interface EsConjJson {
-  forms: Record<EsConjForm, EsConjEntry[]>;
+  forms: { [P in EsConjForm]?: EsConjEntry[] };
 }
 
 // TODO: nicer layout of pages with multiple definitions (i.e. jump to definition)
@@ -191,7 +191,7 @@ interface EsConjJson {
 function buildConjugationSidebar(innerJson: EsConjJson) {
   const forms = FORMS.map((i) => {
     const div = document.createElement("div");
-    const terms = innerJson.forms[i] ?? [{form: "\u2E3B"}];
+    const terms = innerJson.forms[i] ?? [{ form: "\u2E3B" }];
     terms
       .map((j) => {
         const span = document.createElement("span");
